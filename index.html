@@ -237,6 +237,7 @@
       emptyInactive:"Здесь пока пусто — сюда попадут клиенты со статусом «неактивный».",
       saveErrorToast:"Не удалось сохранить, попробуйте ещё раз.", savedToast:"Сохранено",
       staleTag:"давно не было контакта", added:"добавлен", updated:"обновлён",
+      needsReviewTag:"🤖 от бота, нужна проверка", markReviewed:"Проверено",
       months:"мес.", years:"лет",
       who:"Кто проживает", kids:"дети", noKids:"без детей", pets:"питомцы", noPets:"без питомцев",
       statTotal:"Всего клиентов", statNew:"Новые за 7 дней", statFollowup:"Нужно связаться",
@@ -278,6 +279,7 @@
       emptyInactive:"Vacío por ahora — acá van a aparecer los clientes marcados «inactivo».",
       saveErrorToast:"No se pudo guardar, intentá de nuevo.", savedToast:"Guardado",
       staleTag:"sin contacto hace tiempo", added:"agregado", updated:"actualizado",
+      needsReviewTag:"🤖 del bot, necesita revisión", markReviewed:"Revisado",
       months:"meses", years:"años",
       who:"Quiénes viven", kids:"niños", noKids:"sin niños", pets:"mascotas", noPets:"sin mascotas",
       statTotal:"Clientes en total", statNew:"Nuevos (7 días)", statFollowup:"Necesitan seguimiento",
@@ -528,6 +530,9 @@
 
     var actions = "";
     if(isOwnerTeam()){
+      if(c.needs_review){
+        actions += '<button class="btn btn-ghost btn-sm" data-action="mark-reviewed" data-id="' + c.id + '">' + icon("smile") + t("markReviewed") + '</button>';
+      }
       actions += '<button class="btn btn-ghost btn-sm" data-action="edit-client" data-id="' + c.id + '">' + icon("pencil") + t("edit") + '</button>';
       actions += '<button class="btn btn-ghost btn-sm" data-action="toggle-status" data-id="' + c.id + '">' + (c.status==="active" ? icon("archive") + t("makeInactive") : icon("restore") + t("makeActive")) + '</button>';
       if(view.pendingDeleteId === c.id){
@@ -553,6 +558,7 @@
             usernameHTML +
             '<span class="chip ' + (c.status==="active"?"chip-active":"chip-inactive") + '">' + (c.status==="active"?t("statusActive"):t("statusInactive")) + '</span>' +
             (stale ? '<span class="chip chip-stale">' + icon("clock") + t("staleTag") + '</span>' : '') +
+            (c.needs_review ? '<span class="chip chip-stale">' + t("needsReviewTag") + '</span>' : '') +
             '</div>' +
             '<div class="card-actions">' + actions + '</div>' +
           '</div>' +
@@ -692,7 +698,7 @@
 
     var agentLinkHTML = "";
     if(isOwnerTeam()){
-      var linkUrl = state.agentLink ? (window.location.origin + "/functions/v1/agent?token=" + encodeURIComponent(state.agentLink)) : "";
+      var linkUrl = state.agentLink ? ("https://taty2525.github.io/arenda-ba-crm-site/agent.html?token=" + encodeURIComponent(state.agentLink)) : "";
       agentLinkHTML =
         '<div class="link-box">' +
           '<span style="font-size:12.5px;font-weight:700;color:var(--ink-soft);white-space:nowrap;">' + icon("link") + ' ' + t("agentLinkLabel") + '</span>' +
@@ -792,6 +798,9 @@
       payload.status = "active";
       p = sb.from("clients").insert(payload).select().single();
     } else {
+      // Ручное сохранение = ты проверила и поправила карточку, даже если её
+      // создал бот — снимаем пометку "нужна проверка".
+      payload.needs_review = false;
       p = sb.from("clients").update(payload).eq("id", view.editingId).select().single();
     }
     p.then(function(res){
@@ -806,6 +815,13 @@
     var c = state.clients.filter(function(x){return x.id===id;})[0];
     if(!c) return;
     sb.from("clients").update({ status: c.status==="active"?"inactive":"active" }).eq("id", id).then(function(res){
+      if(res.error){ showToast(t("saveErrorToast")); return; }
+      loadClients().then(render);
+    });
+  }
+
+  function markReviewed(id){
+    sb.from("clients").update({ needs_review: false }).eq("id", id).then(function(res){
       if(res.error){ showToast(t("saveErrorToast")); return; }
       loadClients().then(render);
     });
@@ -872,6 +888,7 @@
     if(action === "cancel-edit"){ view.editingId=null; view.draft=null; render(); return; }
     if(action === "save-client"){ saveClient(); return; }
     if(action === "toggle-status"){ toggleStatus(btn.getAttribute("data-id")); return; }
+    if(action === "mark-reviewed"){ markReviewed(btn.getAttribute("data-id")); return; }
     if(action === "delete-client"){ view.pendingDeleteId = btn.getAttribute("data-id"); render(); return; }
     if(action === "cancel-delete"){ view.pendingDeleteId = null; render(); return; }
     if(action === "confirm-delete"){ deleteClient(btn.getAttribute("data-id")); return; }
