@@ -226,7 +226,8 @@
       fieldMoveIn:"Дата заезда (если точная)", fieldMoveInText:"Заезд — как написал клиент", fieldMonths:"На сколько месяцев",
       fieldChildren:"Есть дети", fieldChildrenAges:"Возраст детей", addAge:"+ возраст",
       fieldPregnant:"Беременность", fieldPets:"Есть животные",
-      fieldPetType:"Вид", fieldPetAge:"Возраст питомца", fieldPetNote:"Заметка", petCat:"Кошка", petDog:"Собака", petOther:"Другое", petSelect:"Выбрать",
+      fieldPetType:"Вид", fieldPetAge:"Возраст питомца", fieldPetNote:"Заметка", fieldPetCount:"Сколько питомцев",
+      petCat:"Кошка", petDog:"Собака", petOther:"Другое", petCatPlural:"Кошки", petDogPlural:"Собаки", petOtherPlural:"Другое", petSelect:"Выбрать",
       uploadPhoto:"Загрузить фото", uploading:"Загрузка…",
       fieldBedrooms:"Спальни", fieldBudget:"Бюджет", fieldAreas:"Районы",
       addAreaPlaceholder:"Свой район…", addAreaBtn:"+",
@@ -243,6 +244,7 @@
       months:"мес.", years:"лет",
       who:"Кто проживает", kids:"дети", noKids:"без детей", pets:"питомцы", noPets:"без питомцев",
       adultOne:"взрослый", adultsMany:"взрослых", childOne:"ребёнок", childrenMany:"детей", and:"и",
+      fieldRentalTerm:"Срок аренды словами (если не точное число)",
       upTo:"до", moveInLabel:"заезд",
       bedroomWord1:"спальня", bedroomWord234:"спальни", bedroomWordMany:"спален",
       moveInFrom:"Заезд с", moveIn:"Заезд", rentalTerm:"Срок аренды",
@@ -274,7 +276,8 @@
       fieldMoveIn:"Fecha de ingreso (si es exacta)", fieldMoveInText:"Ingreso — como lo escribió el cliente", fieldMonths:"Por cuántos meses",
       fieldChildren:"Tiene niños", fieldChildrenAges:"Edad de los niños", addAge:"+ edad",
       fieldPregnant:"Embarazo", fieldPets:"Tiene mascotas",
-      fieldPetType:"Tipo", fieldPetAge:"Edad de la mascota", fieldPetNote:"Nota", petCat:"Gato", petDog:"Perro", petOther:"Otro", petSelect:"Elegir",
+      fieldPetType:"Tipo", fieldPetAge:"Edad de la mascota", fieldPetNote:"Nota", fieldPetCount:"Cuántas mascotas",
+      petCat:"Gato", petDog:"Perro", petOther:"Otro", petCatPlural:"Gatos", petDogPlural:"Perros", petOtherPlural:"Otro", petSelect:"Elegir",
       uploadPhoto:"Subir foto", uploading:"Subiendo…",
       fieldBedrooms:"Dormitorios", fieldBudget:"Presupuesto", fieldAreas:"Barrios",
       addAreaPlaceholder:"Otro barrio…", addAreaBtn:"+",
@@ -290,7 +293,8 @@
       needsReviewTag:"del bot, necesita revisión", markReviewed:"Revisado",
       months:"meses", years:"años",
       who:"Quiénes viven", kids:"niños", noKids:"sin niños", pets:"mascotas", noPets:"sin mascotas",
-      adultOne:"adulto", adultsMany:"adultos", childOne:"hijo", childrenMany:"hijos", and:"y",
+      adultOne:"adulto", adultsMany:"adultos", childOne:"niño", childrenMany:"niños", and:"y",
+      fieldRentalTerm:"Duración del alquiler en palabras (si no es un número exacto)",
       upTo:"hasta", moveInLabel:"ingreso",
       bedroomWord1:"dormitorio", bedroomWord234:"dormitorios", bedroomWordMany:"dormitorios",
       moveInFrom:"Ingreso desde", moveIn:"Ingreso", rentalTerm:"Duración del alquiler",
@@ -366,10 +370,26 @@
       var mtext = (view.lang === "es" && c.move_in_text_es) ? c.move_in_text_es : c.move_in_text;
       parts.push(esc(t("moveIn")) + ": " + esc(mtext));
     }
-    if(c.months) parts.push(esc(t("rentalTerm")) + ": " + esc(c.months) + " " + esc(t("months")));
+    if(c.months){
+      // Точное число месяцев известно.
+      parts.push(esc(t("rentalTerm")) + ": " + esc(c.months) + " " + esc(t("months")));
+    } else if(c.rental_term_text){
+      // Точного числа нет — срок словами ("3-12 мес", "от 6 мес.",
+      // "долгий срок"), с переводом в испанском режиме, как и move_in_text.
+      var rtext = (view.lang === "es" && c.rental_term_text_es) ? c.rental_term_text_es : c.rental_term_text;
+      parts.push(esc(t("rentalTerm")) + ": " + esc(rtext));
+    }
     return parts.join(" · ");
   }
-  function petTypeLabel(v){ if(v==="cat") return t("petCat"); if(v==="dog") return t("petDog"); if(v==="other") return t("petOther"); return ""; }
+  // count — если известно точное число питомцев, используем форму
+  // множественного числа ("Собаки" вместо "Собака").
+  function petTypeLabel(v, count){
+    var plural = count && count !== 1;
+    if(v==="cat") return plural ? t("petCatPlural") : t("petCat");
+    if(v==="dog") return plural ? t("petDogPlural") : t("petDog");
+    if(v==="other") return plural ? t("petOtherPlural") : t("petOther");
+    return "";
+  }
 
   function joinAnd(arr){
     arr = arr.slice();
@@ -377,6 +397,9 @@
     var last = arr.pop();
     return arr.join(", ") + " " + t("and") + " " + last;
   }
+  // Русская запятая для дробного возраста ("1.8" → "1,8"); целые числа —
+  // без изменений.
+  function fmtAge(n){ return String(n).replace(".", ","); }
   // Три отдельные строки (взрослые / дети / питомцы), каждая со своей
   // иконкой — вместо одной длинной слитной фразы.
   function adultsLine(c){
@@ -385,7 +408,7 @@
   }
   function childrenLine(c){
     if(c.has_children && (c.children_ages||[]).length){
-      var ages = (c.children_ages||[]).map(String);
+      var ages = (c.children_ages||[]).map(fmtAge);
       var word = ages.length===1 ? t("childOne") : t("childrenMany");
       return ages.length + " " + word + " " + joinAnd(ages) + " " + t("years");
     }
@@ -394,10 +417,11 @@
   }
   function petsLine(c){
     if(!c.has_pets) return t("noPets");
-    // Отдельного поля "сколько питомцев" в базе нет — по умолчанию считаем
+    // Если клиент явно назвал количество — используем его, иначе считаем
     // одного (обычный случай), явно это не выясняя.
-    var typeAge = [petTypeLabel(c.pet_type), c.pet_age].filter(Boolean).join(" ") || t("pets");
-    return "1 " + typeAge;
+    var count = c.pet_count || 1;
+    var typeAge = [petTypeLabel(c.pet_type, count), c.pet_age].filter(Boolean).join(" ") || t("pets");
+    return count + " " + typeAge;
   }
 
   function loadJSON(key, fallback){ try{ var v = localStorage.getItem(key); return v==null?fallback:JSON.parse(v); }catch(e){ return fallback; } }
@@ -455,9 +479,9 @@
   function blankClient(){
     return {
       id:null, display_name:"", username:"", status:"active", raw_message:"",
-      adults:1, who_note:"", move_in_date:"", move_in_text:"", months:"",
+      adults:1, who_note:"", move_in_date:"", move_in_text:"", months:"", rental_term_text:"",
       has_children:false, children_ages:[], pregnant:false,
-      has_pets:false, pet_type:"", pet_age:"", pet_note:"", pet_photo_url:"",
+      has_pets:false, pet_type:"", pet_age:"", pet_note:"", pet_photo_url:"", pet_count:"",
       bedrooms:"", budget_amount:"", budget_currency:"USD",
       area_ids:[], custom_areas:[], other_criteria:""
     };
@@ -734,9 +758,10 @@
   function renderAgeChips(){
     var d = view.draft;
     var chips = (d.children_ages||[]).map(function(age,i){
-      return '<span class="age-chip">' + age + ' ' + t("years") + ' <button type="button" data-action="remove-age" data-idx="' + i + '">✕</button></span>';
+      return '<span class="age-chip">' + fmtAge(age) + ' ' + t("years") + ' <button type="button" data-action="remove-age" data-idx="' + i + '">✕</button></span>';
     }).join("");
-    return '<div class="agebox">' + chips + '<span class="add-age-row"><input type="number" min="0" max="25" id="f-new-age" placeholder="0"><button type="button" class="btn btn-sm" data-action="add-age">' + t("addAge") + '</button></span></div>';
+    // step="any" — возраст ребёнка бывает дробным ("1.8" = 1 год 8 мес).
+    return '<div class="agebox">' + chips + '<span class="add-age-row"><input type="number" min="0" max="25" step="any" id="f-new-age" placeholder="0"><button type="button" class="btn btn-sm" data-action="add-age">' + t("addAge") + '</button></span></div>';
   }
 
   function renderForm(){
@@ -763,6 +788,7 @@
             '<div class="field"><label>' + t("fieldMoveIn") + '</label><input type="date" data-field="move_in_date" value="' + esc(d.move_in_date) + '"></div>' +
             '<div class="field span2"><label>' + t("fieldMoveInText") + '</label><input type="text" data-field="move_in_text" value="' + esc(d.move_in_text) + '" placeholder="например: с середины октября"></div>' +
             '<div class="field"><label>' + t("fieldMonths") + '</label><input type="number" min="0" data-field="months" value="' + esc(d.months) + '"></div>' +
+            '<div class="field span2"><label>' + t("fieldRentalTerm") + '</label><input type="text" data-field="rental_term_text" value="' + esc(d.rental_term_text) + '" placeholder="например: от 6 мес. / долгий срок"></div>' +
             '<div class="field"><label class="field-inline"><input type="checkbox" data-field="pregnant"' + (d.pregnant?" checked":"") + '> ' + t("fieldPregnant") + '</label></div>' +
             '<div class="field span3"><label class="field-inline"><input type="checkbox" data-field="has_children"' + (d.has_children?" checked":"") + '> ' + t("fieldChildren") + '</label>' +
               (d.has_children ? ('<div style="margin-top:6px;">' + renderAgeChips() + '</div>') : '') +
@@ -770,8 +796,9 @@
             '<div class="field span3"><label class="field-inline"><input type="checkbox" data-field="has_pets"' + (d.has_pets?" checked":"") + '> ' + t("fieldPets") + '</label></div>' +
             (d.has_pets ? (
               '<div class="field"><label>' + t("fieldPetType") + '</label><select class="native" data-field="pet_type">' + petTypeOpts + '</select></div>' +
+              '<div class="field"><label>' + t("fieldPetCount") + '</label><input type="number" min="1" data-field="pet_count" value="' + esc(d.pet_count) + '"></div>' +
               '<div class="field"><label>' + t("fieldPetAge") + '</label><input type="text" data-field="pet_age" value="' + esc(d.pet_age) + '"></div>' +
-              '<div class="field"><label>' + t("fieldPetNote") + '</label><input type="text" data-field="pet_note" value="' + esc(d.pet_note) + '"></div>' +
+              '<div class="field span3"><label>' + t("fieldPetNote") + '</label><input type="text" data-field="pet_note" value="' + esc(d.pet_note) + '"></div>' +
               '<div class="field span3"><label>' + t("sectionPhoto") + '</label>' +
                 '<div class="photo-row">' +
                   (d.pet_photo_url ? ('<img class="photo-preview" src="' + esc(d.pet_photo_url) + '">') : '') +
@@ -915,7 +942,7 @@
   }
 
   /* ---------- draft field binding ---------- */
-  var FLAT_FIELDS = ["display_name","username","raw_message","adults","who_note","move_in_date","move_in_text","months","pregnant","has_children","has_pets","pet_type","pet_age","pet_note","bedrooms","budget_amount","budget_currency","other_criteria"];
+  var FLAT_FIELDS = ["display_name","username","raw_message","adults","who_note","move_in_date","move_in_text","months","rental_term_text","pregnant","has_children","has_pets","pet_type","pet_count","pet_age","pet_note","bedrooms","budget_amount","budget_currency","other_criteria"];
   function readFormValuesIntoDraft(){
     var form = document.querySelector(".form");
     if(!form || !view.draft) return;
@@ -938,8 +965,10 @@
       display_name: d.display_name, username: d.username || null, raw_message: d.raw_message || null,
       adults: d.adults ? parseInt(d.adults,10) : null, who_note: d.who_note || null,
       move_in_date: d.move_in_date || null, move_in_text: d.move_in_text || null, months: d.months ? parseInt(d.months,10) : null,
+      rental_term_text: d.rental_term_text || null,
       has_children: !!d.has_children, children_ages: d.children_ages || [], pregnant: !!d.pregnant,
       has_pets: !!d.has_pets, pet_type: d.has_pets ? (d.pet_type||null) : null,
+      pet_count: d.has_pets && d.pet_count ? parseInt(d.pet_count,10) : null,
       pet_age: d.has_pets ? (d.pet_age||null) : null, pet_note: d.has_pets ? (d.pet_note||null) : null,
       pet_photo_url: d.has_pets ? (d.pet_photo_url||null) : null,
       bedrooms: d.bedrooms || null,
@@ -954,12 +983,15 @@
       // Ручное сохранение = ты проверила и поправила карточку, даже если её
       // создал бот — снимаем пометку "нужна проверка".
       payload.needs_review = false;
-      // Если текст "заезда своими словами" поменяли руками — старый
-      // испанский перевод больше не годится, сбрасываем, чтобы
+      // Если текст "заезда"/"срока аренды" своими словами поменяли руками
+      // — старый испанский перевод больше не годится, сбрасываем, чтобы
       // autoTranslateMissing тихо пересчитал его заново.
       var orig = state.clients.filter(function(x){ return x.id === view.editingId; })[0];
       if(orig && (orig.move_in_text || "") !== (payload.move_in_text || "")){
         payload.move_in_text_es = null;
+      }
+      if(orig && (orig.rental_term_text || "") !== (payload.rental_term_text || "")){
+        payload.rental_term_text_es = null;
       }
       p = sb.from("clients").update(payload).eq("id", view.editingId).select().single();
     }
@@ -1032,6 +1064,11 @@
         translateAttempted[key] = true;
         translateMoveInText(c.id, c.move_in_text);
       }
+      var rkey = "r:" + c.id;
+      if(c.rental_term_text && !c.rental_term_text_es && !translateAttempted[rkey]){
+        translateAttempted[rkey] = true;
+        translateRentalTermText(c.id, c.rental_term_text);
+      }
     });
   }
 
@@ -1055,6 +1092,15 @@
     translateText(text).then(function(es){
       if(!es) return;
       return sb.from("clients").update({ move_in_text_es: es }).eq("id", clientId).then(function(){
+        return loadClients().then(render);
+      });
+    });
+  }
+
+  function translateRentalTermText(clientId, text){
+    translateText(text).then(function(es){
+      if(!es) return;
+      return sb.from("clients").update({ rental_term_text_es: es }).eq("id", clientId).then(function(){
         return loadClients().then(render);
       });
     });
@@ -1122,7 +1168,7 @@
     if(action === "remove-custom-area"){ var ridx=parseInt(btn.getAttribute("data-idx"),10); view.draft.custom_areas.splice(ridx,1); render(); return; }
     if(action === "add-age"){
       var ageInput = document.getElementById("f-new-age");
-      var av = ageInput && parseInt(ageInput.value,10);
+      var av = ageInput && parseFloat(ageInput.value);
       if(!isNaN(av) && av>=0){ view.draft.children_ages.push(av); }
       render(); return;
     }

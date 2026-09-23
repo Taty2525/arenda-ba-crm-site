@@ -69,13 +69,15 @@
     ru:{ title:"Активные поиски", langBtn:"ES", fieldBedrooms:"Спальни", notSpecified:"не указано", studio:"Студия", plus4:"4+",
       bedroomWord1:"спальня", bedroomWord234:"спальни", bedroomWordMany:"спален",
       moveInFrom:"Заезд с", moveIn:"Заезд", rentalTerm:"Срок аренды", months:"мес.",
-      who:"Кто проживает", noKids:"без детей", noPets:"без питомцев", petCat:"Кошка", petDog:"Собака", petOther:"Другое",
+      who:"Кто проживает", noKids:"без детей", noPets:"без питомцев",
+      petCat:"Кошка", petDog:"Собака", petOther:"Другое", petCatPlural:"Кошки", petDogPlural:"Собаки", petOtherPlural:"Другое",
       fieldPregnant:"Беременность", empty:"Активных поисков пока нет.", errorTitle:"Ссылка недействительна",
       errorBody:"Эта ссылка больше не активна. Попросите новую ссылку у Татьяны." },
     es:{ title:"Búsquedas activas", langBtn:"RU", fieldBedrooms:"Dormitorios", notSpecified:"sin especificar", studio:"Monoambiente", plus4:"4+",
       bedroomWord1:"dormitorio", bedroomWord234:"dormitorios", bedroomWordMany:"dormitorios",
       moveInFrom:"Ingreso desde", moveIn:"Ingreso", rentalTerm:"Duración del alquiler", months:"meses",
-      who:"Quiénes viven", noKids:"sin niños", noPets:"sin mascotas", petCat:"Gato", petDog:"Perro", petOther:"Otro",
+      who:"Quiénes viven", noKids:"sin niños", noPets:"sin mascotas",
+      petCat:"Gato", petDog:"Perro", petOther:"Otro", petCatPlural:"Gatos", petDogPlural:"Perros", petOtherPlural:"Otro",
       fieldPregnant:"Embarazo", empty:"Todavía no hay búsquedas activas.", errorTitle:"Enlace inválido",
       errorBody:"Este enlace ya no está activo. Pedile a Tatiana un enlace nuevo." }
   };
@@ -115,11 +117,23 @@
       var mtext = (lang === "es" && c.move_in_text_es) ? c.move_in_text_es : c.move_in_text;
       parts.push(esc(t("moveIn")) + ": " + esc(mtext));
     }
-    if(c.months) parts.push(esc(t("rentalTerm")) + ": " + esc(c.months) + " " + esc(t("months")));
+    if(c.months){
+      parts.push(esc(t("rentalTerm")) + ": " + esc(c.months) + " " + esc(t("months")));
+    } else if(c.rental_term_text){
+      var rtext = (lang === "es" && c.rental_term_text_es) ? c.rental_term_text_es : c.rental_term_text;
+      parts.push(esc(t("rentalTerm")) + ": " + esc(rtext));
+    }
     return parts.join(" · ");
   }
-  function petTypeLabel(v){ if(v==="cat") return t("petCat"); if(v==="dog") return t("petDog"); if(v==="other") return t("petOther"); return ""; }
+  function petTypeLabel(v, count){
+    var plural = count && count !== 1;
+    if(v==="cat") return plural ? t("petCatPlural") : t("petCat");
+    if(v==="dog") return plural ? t("petDogPlural") : t("petDog");
+    if(v==="other") return plural ? t("petOtherPlural") : t("petOther");
+    return "";
+  }
   function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g, function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); }
+  function fmtAge(n){ return String(n).replace(".", ","); }
 
   var ICON_house = '<path d="M4 11.5 12 4l8 7.5"/><path d="M6 10.5V20a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V10.5"/><path d="M10 21v-6h4v6"/>';
   var ICON_clock = '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3.5 2"/>';
@@ -143,10 +157,11 @@
     ].filter(Boolean).join(" · ");
     var icons = [];
     icons.push("<span>" + t("who") + ": " + (c.adults||0) + "</span>");
-    icons.push("<span>" + (c.has_children ? (icon(ICON_smile) + esc((c.children_ages||[]).join(", "))) : t("noKids")) + "</span>");
+    icons.push("<span>" + (c.has_children ? (icon(ICON_smile) + esc((c.children_ages||[]).map(fmtAge).join(", "))) : t("noKids")) + "</span>");
     if(c.pregnant) icons.push("<span>" + icon(ICON_heart) + t("fieldPregnant") + "</span>");
     if(c.has_pets){
-      icons.push("<span>" + (c.pet_photo_url ? ('<img class="pet-thumb" src="'+esc(c.pet_photo_url)+'">') : icon(ICON_paw)) + esc([petTypeLabel(c.pet_type), c.pet_age].filter(Boolean).join(" ")) + "</span>");
+      var petCount = c.pet_count || 1;
+      icons.push("<span>" + (c.pet_photo_url ? ('<img class="pet-thumb" src="'+esc(c.pet_photo_url)+'">') : icon(ICON_paw)) + esc(petCount + " " + [petTypeLabel(c.pet_type, petCount), c.pet_age].filter(Boolean).join(" ")) + "</span>");
     } else {
       icons.push("<span>" + t("noPets") + "</span>");
     }
