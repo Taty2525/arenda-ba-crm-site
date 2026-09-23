@@ -260,7 +260,7 @@
       agentLinkLabel:"Ссылка для агентов (только просмотр)", copyLink:"Копировать", rotateLink:"Обновить ссылку", linkCopied:"Ссылка скопирована",
       commentsShow:"Комментарии", commentsHide:"Скрыть комментарии",
       commentPrivate:"Личный (только владелец/команда)", commentGeneral:"Общий",
-      commentPlaceholder:"Написать комментарий…", commentSend:"Отправить",
+      commentPlaceholder:"Написать комментарий…", commentSend:"Отправить", addComment:"Добавить комментарий",
       openTelegram:"Написать в Telegram",
       roleOwner:"Владелец", roleTeam:"Команда", rolePartner:"Партнёр",
       noComments:"Пока нет комментариев."
@@ -310,7 +310,7 @@
       agentLinkLabel:"Enlace para agentes (solo lectura)", copyLink:"Copiar", rotateLink:"Renovar enlace", linkCopied:"Enlace copiado",
       commentsShow:"Comentarios", commentsHide:"Ocultar comentarios",
       commentPrivate:"Privado (solo dueña/equipo)", commentGeneral:"General",
-      commentPlaceholder:"Escribir un comentario…", commentSend:"Enviar",
+      commentPlaceholder:"Escribir un comentario…", commentSend:"Enviar", addComment:"Agregar comentario",
       openTelegram:"Escribir por Telegram",
       roleOwner:"Dueña", roleTeam:"Equipo", rolePartner:"Partner",
       noComments:"Todavía no hay comentarios."
@@ -433,7 +433,7 @@
     tab: "active", search: "",
     editingId: null, draft: null, photoFile: null, photoBusy:false,
     pendingDeleteId: null,
-    expandedPhoto: {}, newComment: {}, newCommentPrivate: {}, translating: {},
+    expandedPhoto: {}, newComment: {}, newCommentPrivate: {}, translating: {}, composeOpen: {},
     loginSent:false, loginBusy:false, loginError:false
   };
 
@@ -640,19 +640,25 @@
 
     var composeHTML = "";
     if(canWrite){
-      var privToggle = isOwnerTeam() ? (
-        '<div class="seg" data-comment-priv-group="' + clientId + '">' +
-          '<button type="button" class="' + (!view.newCommentPrivate[clientId]?"active":"") + '" data-action="set-comment-priv" data-id="' + clientId + '" data-priv="0">' + t("commentGeneral") + '</button>' +
-          '<button type="button" class="' + (view.newCommentPrivate[clientId]?"active":"") + '" data-action="set-comment-priv" data-id="' + clientId + '" data-priv="1">' + icon("lock") + t("commentPrivate") + '</button>' +
-        '</div>'
-      ) : '<span style="font-size:11.5px;color:var(--ink-faint);">' + t("commentGeneral") + '</span>';
-      composeHTML =
-        '<div class="comment-compose">' +
-          '<textarea data-comment-input="' + clientId + '" placeholder="' + t("commentPlaceholder") + '">' + esc(view.newComment[clientId]||"") + '</textarea>' +
-          '<div class="comment-compose-row">' + privToggle +
-            '<button class="btn btn-sm btn-primary" data-action="send-comment" data-id="' + clientId + '">' + icon("send") + t("commentSend") + '</button>' +
-          '</div>' +
-        '</div>';
+      if(view.composeOpen[clientId]){
+        var privToggle = isOwnerTeam() ? (
+          '<div class="seg" data-comment-priv-group="' + clientId + '">' +
+            '<button type="button" class="' + (!view.newCommentPrivate[clientId]?"active":"") + '" data-action="set-comment-priv" data-id="' + clientId + '" data-priv="0">' + t("commentGeneral") + '</button>' +
+            '<button type="button" class="' + (view.newCommentPrivate[clientId]?"active":"") + '" data-action="set-comment-priv" data-id="' + clientId + '" data-priv="1">' + icon("lock") + t("commentPrivate") + '</button>' +
+          '</div>'
+        ) : '<span style="font-size:11.5px;color:var(--ink-faint);">' + t("commentGeneral") + '</span>';
+        composeHTML =
+          '<div class="comment-compose">' +
+            '<textarea data-comment-input="' + clientId + '" placeholder="' + t("commentPlaceholder") + '" autofocus>' + esc(view.newComment[clientId]||"") + '</textarea>' +
+            '<div class="comment-compose-row">' + privToggle +
+              '<button class="btn btn-sm btn-primary" data-action="send-comment" data-id="' + clientId + '">' + icon("send") + t("commentSend") + '</button>' +
+            '</div>' +
+          '</div>';
+      } else {
+        // Поле ввода спрятано за кнопкой — не занимает место на карточке,
+        // пока реально не нужно.
+        composeHTML = '<button type="button" class="btn btn-sm btn-ghost" style="align-self:flex-start;" data-action="open-compose" data-id="' + clientId + '">' + icon("plus") + t("addComment") + '</button>';
+      }
     }
     return '<div class="comments">' + itemsHTML + composeHTML + '</div>';
   }
@@ -830,6 +836,14 @@
     if(!state.session){ renderLogin(); return; }
     if(!state.profile || !state.profile.approved){ renderWaiting(); return; }
 
+    // Запоминаем ДО перерисовки, было ли поле поиска в фокусе — innerHTML
+    // ниже уничтожает текущий фокус в любом случае. Раньше .focus() на
+    // поиске вызывался безусловно при КАЖДОМ render() (после любого клика
+    // — открыть фото, отправить комментарий и т.п.), из-за чего страницу
+    // всегда перебрасывало к строке поиска. Возвращаем фокус туда, только
+    // если он и был там до перерисовки.
+    var searchWasFocused = document.activeElement && document.activeElement.id === "f-search";
+
     var actives = state.clients.filter(function(c){ return c.status==="active"; });
     var inactives = state.clients.filter(function(c){ return c.status==="inactive"; });
     var list = view.tab === "active" ? actives : inactives;
@@ -917,8 +931,10 @@
     var searchInput = document.getElementById("f-search");
     if(searchInput){
       searchInput.addEventListener("input", function(e){ view.search = e.target.value; render(); });
-      searchInput.focus();
-      var val = searchInput.value; searchInput.value = ""; searchInput.value = val;
+      if(searchWasFocused){
+        searchInput.focus();
+        var val = searchInput.value; searchInput.value = ""; searchInput.value = val; // курсор в конец
+      }
     }
     var photoInput = document.getElementById("f-pet-photo");
     if(photoInput){
@@ -1034,6 +1050,7 @@
     sb.from("client_comments").insert({ client_id: clientId, body: body, is_private: isPrivate }).then(function(res){
       if(res.error){ showToast(t("saveErrorToast")); return; }
       view.newComment[clientId] = "";
+      view.composeOpen[clientId] = false; // сворачиваем поле ввода обратно за кнопку
       // loadComments() сама подхватит новый комментарий и запустит перевод
       // в фоне (autoTranslateMissing) — отдельно дёргать перевод не нужно.
       loadComments().then(render);
@@ -1178,6 +1195,7 @@
       render(); return;
     }
     if(action === "send-comment"){ sendComment(btn.getAttribute("data-id")); return; }
+    if(action === "open-compose"){ view.composeOpen[btn.getAttribute("data-id")] = true; render(); return; }
     if(action === "toggle-photo"){
       var pid = btn.getAttribute("data-id");
       view.expandedPhoto[pid] = !view.expandedPhoto[pid];
