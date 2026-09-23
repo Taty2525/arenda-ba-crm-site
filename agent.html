@@ -68,13 +68,13 @@
   var STRINGS = {
     ru:{ title:"Активные поиски", langBtn:"ES", fieldBedrooms:"Спальни", notSpecified:"не указано", studio:"Студия", plus4:"4+",
       bedroomWord1:"спальня", bedroomWord234:"спальни", bedroomWordMany:"спален",
-      moveInFrom:"Заезд с", rentalTerm:"Срок аренды", months:"мес.",
+      moveInFrom:"Заезд с", moveIn:"Заезд", rentalTerm:"Срок аренды", months:"мес.",
       who:"Кто проживает", noKids:"без детей", noPets:"без питомцев", petCat:"Кошка", petDog:"Собака", petOther:"Другое",
       fieldPregnant:"Беременность", empty:"Активных поисков пока нет.", errorTitle:"Ссылка недействительна",
       errorBody:"Эта ссылка больше не активна. Попросите новую ссылку у Татьяны." },
     es:{ title:"Búsquedas activas", langBtn:"RU", fieldBedrooms:"Dormitorios", notSpecified:"sin especificar", studio:"Monoambiente", plus4:"4+",
       bedroomWord1:"dormitorio", bedroomWord234:"dormitorios", bedroomWordMany:"dormitorios",
-      moveInFrom:"Ingreso desde", rentalTerm:"Duración del alquiler", months:"meses",
+      moveInFrom:"Ingreso desde", moveIn:"Ingreso", rentalTerm:"Duración del alquiler", months:"meses",
       who:"Quiénes viven", noKids:"sin niños", noPets:"sin mascotas", petCat:"Gato", petDog:"Perro", petOther:"Otro",
       fieldPregnant:"Embarazo", empty:"Todavía no hay búsquedas activas.", errorTitle:"Enlace inválido",
       errorBody:"Este enlace ya no está activo. Pedile a Tatiana un enlace nuevo." }
@@ -104,9 +104,11 @@
   }
   function timelineLine(c){
     var parts = [];
-    if(c.move_in_date){
+    if(c.move_in_text){
+      parts.push(esc(t("moveIn")) + ": " + esc(c.move_in_text));
+    } else if(c.move_in_date){
       var d = new Date(c.move_in_date);
-      var dateStr = isNaN(d.getTime()) ? c.move_in_date : d.toLocaleDateString(lang==="es"?"es-AR":"ru-RU",{day:"2-digit",month:"2-digit",year:"numeric"});
+      var dateStr = isNaN(d.getTime()) ? c.move_in_date : (d.getDate() + "." + (d.getMonth()+1));
       parts.push(esc(t("moveInFrom")) + " " + esc(dateStr));
     }
     if(c.months) parts.push(esc(t("rentalTerm")) + ": " + esc(c.months) + " " + esc(t("months")));

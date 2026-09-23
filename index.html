@@ -223,7 +223,7 @@
       fieldDisplayName:"Имя в Telegram", fieldUsername:"Никнейм (видно только вам)",
       fieldRaw:"Сообщение клиента (как прислали)",
       fieldAdults:"Взрослых", fieldWhoNote:"Кто именно / уточнение",
-      fieldMoveIn:"Дата заезда", fieldMonths:"На сколько месяцев",
+      fieldMoveIn:"Дата заезда (если точная)", fieldMoveInText:"Заезд — как написал клиент", fieldMonths:"На сколько месяцев",
       fieldChildren:"Есть дети", fieldChildrenAges:"Возраст детей", addAge:"+ возраст",
       fieldPregnant:"Беременность", fieldPets:"Есть животные",
       fieldPetType:"Вид", fieldPetAge:"Возраст питомца", fieldPetNote:"Заметка", petCat:"Кошка", petDog:"Собака", petOther:"Другое", petSelect:"Выбрать",
@@ -245,7 +245,7 @@
       adultOne:"взрослый", adultsMany:"взрослых", childOne:"ребёнок", childrenMany:"детей", and:"и",
       upTo:"до", moveInLabel:"заезд",
       bedroomWord1:"спальня", bedroomWord234:"спальни", bedroomWordMany:"спален",
-      moveInFrom:"Заезд с", rentalTerm:"Срок аренды",
+      moveInFrom:"Заезд с", moveIn:"Заезд", rentalTerm:"Срок аренды",
       showPhoto:"Показать фото", hidePhoto:"Скрыть фото", photoCopiedToast:"Ссылка на фото скопирована",
       translateComment:"Перевести на испанский",
       statTotal:"Всего клиентов", statNew:"Новые за 7 дней", statFollowup:"Нужно связаться",
@@ -271,7 +271,7 @@
       fieldDisplayName:"Nombre en Telegram", fieldUsername:"Usuario (solo lo ves vos)",
       fieldRaw:"Mensaje del cliente (tal cual)",
       fieldAdults:"Adultos", fieldWhoNote:"Quiénes / detalle",
-      fieldMoveIn:"Fecha de ingreso", fieldMonths:"Por cuántos meses",
+      fieldMoveIn:"Fecha de ingreso (si es exacta)", fieldMoveInText:"Ingreso — como lo escribió el cliente", fieldMonths:"Por cuántos meses",
       fieldChildren:"Tiene niños", fieldChildrenAges:"Edad de los niños", addAge:"+ edad",
       fieldPregnant:"Embarazo", fieldPets:"Tiene mascotas",
       fieldPetType:"Tipo", fieldPetAge:"Edad de la mascota", fieldPetNote:"Nota", petCat:"Gato", petDog:"Perro", petOther:"Otro", petSelect:"Elegir",
@@ -293,7 +293,7 @@
       adultOne:"adulto", adultsMany:"adultos", childOne:"hijo", childrenMany:"hijos", and:"y",
       upTo:"hasta", moveInLabel:"ingreso",
       bedroomWord1:"dormitorio", bedroomWord234:"dormitorios", bedroomWordMany:"dormitorios",
-      moveInFrom:"Ingreso desde", rentalTerm:"Duración del alquiler",
+      moveInFrom:"Ingreso desde", moveIn:"Ingreso", rentalTerm:"Duración del alquiler",
       showPhoto:"Mostrar foto", hidePhoto:"Ocultar foto", photoCopiedToast:"Enlace de la foto copiado",
       translateComment:"Traducir al español",
       statTotal:"Clientes en total", statNew:"Nuevos (7 días)", statFollowup:"Necesitan seguimiento",
@@ -336,9 +336,26 @@
     var word = n===1 ? t("bedroomWord1") : t("bedroomWord234");
     return "<b>" + n + "</b> " + esc(word);
   }
+  // Короткая дата без года ("1.10") — год почти всегда очевиден из
+  // контекста (заезд обычно скоро), а лишняя "2026" только загромождает
+  // карточку.
+  function fmtShortDate(iso){
+    if(!iso) return "";
+    var d = new Date(iso);
+    if(isNaN(d.getTime())) return iso;
+    return d.getDate() + "." + (d.getMonth()+1);
+  }
   function timelineLine(c){
     var parts = [];
-    if(c.move_in_date) parts.push(esc(t("moveInFrom")) + " " + esc(fmtDate(c.move_in_date)));
+    if(c.move_in_text){
+      // Клиент описал срок своими словами ("с середины октября") — точной
+      // даты может не быть вовсе, показываем как есть, без выдумывания.
+      // Метка без "с" — сама формулировка клиента обычно уже содержит
+      // нужный предлог.
+      parts.push(esc(t("moveIn")) + ": " + esc(c.move_in_text));
+    } else if(c.move_in_date){
+      parts.push(esc(t("moveInFrom")) + " " + esc(fmtShortDate(c.move_in_date)));
+    }
     if(c.months) parts.push(esc(t("rentalTerm")) + ": " + esc(c.months) + " " + esc(t("months")));
     return parts.join(" · ");
   }
@@ -351,23 +368,29 @@
     return arr.join(", ") + " " + t("and") + " " + last;
   }
   function whoSummary(c){
+    // Детей упоминаем отдельным "+"-пунктом только когда они ЕСТЬ. Когда
+    // детей нет, "без детей" не занимает свой отдельный пункт — прицепляем
+    // его к описанию питомцев в конце строки ("2 взрослых + кошка без
+    // детей"), а не пишем лишний "+ без детей".
     var n = c.adults || 0;
-    var adultsPart = n ? (n + " " + (n===1 ? t("adultOne") : t("adultsMany"))) : "";
-    var childrenPart;
+    var mainParts = [];
+    if(n) mainParts.push(n + " " + (n===1 ? t("adultOne") : t("adultsMany")));
+
     if(c.has_children && (c.children_ages||[]).length){
       var ages = (c.children_ages||[]).map(String);
       var word = ages.length===1 ? t("childOne") : t("childrenMany");
-      childrenPart = ages.length + " " + word + " " + joinAnd(ages) + " " + t("years");
+      mainParts.push(ages.length + " " + word + " " + joinAnd(ages) + " " + t("years"));
     } else if(c.has_children){
-      childrenPart = t("childrenMany");
-    } else {
-      childrenPart = t("noKids");
+      mainParts.push(t("childrenMany"));
     }
-    var parts = [adultsPart, childrenPart].filter(Boolean).join(" + ");
+
     var petsPart = c.has_pets
       ? ([petTypeLabel(c.pet_type), c.pet_age].filter(Boolean).join(" ") || t("pets"))
       : t("noPets");
-    return parts + (parts ? ", " : "") + petsPart;
+    if(!c.has_children) petsPart += " " + t("noKids");
+    mainParts.push(petsPart);
+
+    return mainParts.join(" + ");
   }
 
   function loadJSON(key, fallback){ try{ var v = localStorage.getItem(key); return v==null?fallback:JSON.parse(v); }catch(e){ return fallback; } }
@@ -425,7 +448,7 @@
   function blankClient(){
     return {
       id:null, display_name:"", username:"", status:"active", raw_message:"",
-      adults:1, who_note:"", move_in_date:"", months:"",
+      adults:1, who_note:"", move_in_date:"", move_in_text:"", months:"",
       has_children:false, children_ages:[], pregnant:false,
       has_pets:false, pet_type:"", pet_age:"", pet_note:"", pet_photo_url:"",
       bedrooms:"", budget_amount:"", budget_currency:"USD",
@@ -471,6 +494,7 @@
         map[cm.client_id].push(cm);
       });
       state.commentsByClient = map;
+      autoTranslateMissing();
     });
   }
 
@@ -534,14 +558,13 @@
     // только владелец/команда. Партнёры видят общие (не приватные)
     // комментарии, но не могут ни писать, ни переводить.
     var canWrite = isOwnerTeam();
+    // Перевод на испанский считается сам, в фоне (см. autoTranslateMissing)
+    // — без отдельной кнопки. Пока перевода ещё нет (обычно на секунду-две
+    // дольше самого комментария), просто ничего не показываем в этом месте.
     var itemsHTML = list.length ? list.map(function(cm){
-      var esHTML = "";
-      if(cm.body_es){
-        esHTML = '<div style="margin-top:4px;font-style:italic;color:var(--ink-faint);font-size:12px;">' + esc(cm.body_es) + '</div>';
-      } else if(canWrite){
-        var busy = !!view.translating[cm.id];
-        esHTML = '<button type="button" class="btn btn-sm btn-ghost" style="margin-top:4px;padding:2px 8px;font-size:11px;" data-action="translate-comment" data-id="' + clientId + '" data-cid="' + cm.id + '" ' + (busy?"disabled":"") + '>' + icon("globe") + (busy ? "…" : t("translateComment")) + '</button>';
-      }
+      var esHTML = cm.body_es
+        ? '<div style="margin-top:4px;font-style:italic;color:var(--ink-faint);font-size:12px;">' + esc(cm.body_es) + '</div>'
+        : "";
       return '<div class="comment role-' + esc(cm.author_role||"team") + '">' +
         '<div class="comment-meta">' + (cm.is_private ? icon("lock") : "") + esc(cm.author_name||"") + ' · ' + fmtDateTime(cm.created_at) + '</div>' +
         esc(cm.body) + esHTML +
@@ -692,6 +715,7 @@
             '<div class="field"><label>' + t("fieldAdults") + '</label><input type="number" min="0" data-field="adults" value="' + esc(d.adults) + '"></div>' +
             '<div class="field span2"><label>' + t("fieldWhoNote") + '</label><input type="text" data-field="who_note" value="' + esc(d.who_note) + '"></div>' +
             '<div class="field"><label>' + t("fieldMoveIn") + '</label><input type="date" data-field="move_in_date" value="' + esc(d.move_in_date) + '"></div>' +
+            '<div class="field span2"><label>' + t("fieldMoveInText") + '</label><input type="text" data-field="move_in_text" value="' + esc(d.move_in_text) + '" placeholder="например: с середины октября"></div>' +
             '<div class="field"><label>' + t("fieldMonths") + '</label><input type="number" min="0" data-field="months" value="' + esc(d.months) + '"></div>' +
             '<div class="field"><label class="field-inline"><input type="checkbox" data-field="pregnant"' + (d.pregnant?" checked":"") + '> ' + t("fieldPregnant") + '</label></div>' +
             '<div class="field span3"><label class="field-inline"><input type="checkbox" data-field="has_children"' + (d.has_children?" checked":"") + '> ' + t("fieldChildren") + '</label>' +
@@ -845,7 +869,7 @@
   }
 
   /* ---------- draft field binding ---------- */
-  var FLAT_FIELDS = ["display_name","username","raw_message","adults","who_note","move_in_date","months","pregnant","has_children","has_pets","pet_type","pet_age","pet_note","bedrooms","budget_amount","budget_currency","other_criteria"];
+  var FLAT_FIELDS = ["display_name","username","raw_message","adults","who_note","move_in_date","move_in_text","months","pregnant","has_children","has_pets","pet_type","pet_age","pet_note","bedrooms","budget_amount","budget_currency","other_criteria"];
   function readFormValuesIntoDraft(){
     var form = document.querySelector(".form");
     if(!form || !view.draft) return;
@@ -867,7 +891,7 @@
     var payload = {
       display_name: d.display_name, username: d.username || null, raw_message: d.raw_message || null,
       adults: d.adults ? parseInt(d.adults,10) : null, who_note: d.who_note || null,
-      move_in_date: d.move_in_date || null, months: d.months ? parseInt(d.months,10) : null,
+      move_in_date: d.move_in_date || null, move_in_text: d.move_in_text || null, months: d.months ? parseInt(d.months,10) : null,
       has_children: !!d.has_children, children_ages: d.children_ages || [], pregnant: !!d.pregnant,
       has_pets: !!d.has_pets, pet_type: d.has_pets ? (d.pet_type||null) : null,
       pet_age: d.has_pets ? (d.pet_age||null) : null, pet_note: d.has_pets ? (d.pet_note||null) : null,
@@ -922,23 +946,41 @@
     var body = (view.newComment[clientId]||"").trim();
     if(!body) return;
     var isPrivate = isOwnerTeam() ? !!view.newCommentPrivate[clientId] : false;
-    sb.from("client_comments").insert({ client_id: clientId, body: body, is_private: isPrivate }).select().single().then(function(res){
+    sb.from("client_comments").insert({ client_id: clientId, body: body, is_private: isPrivate }).then(function(res){
       if(res.error){ showToast(t("saveErrorToast")); return; }
       view.newComment[clientId] = "";
+      // loadComments() сама подхватит новый комментарий и запустит перевод
+      // в фоне (autoTranslateMissing) — отдельно дёргать перевод не нужно.
       loadComments().then(render);
-      if(res.data && res.data.id){ translateComment(clientId, res.data.id, body); }
     });
   }
 
-  function translateComment(clientId, commentId, text){
-    view.translating[commentId] = true;
-    sb.functions.invoke("translate-comment", { body: { text: text } }).then(function(res){
-      view.translating[commentId] = false;
-      if(res.error || !res.data || !res.data.es){ render(); return; }
-      return sb.from("client_comments").update({ body_es: res.data.es }).eq("id", commentId).then(function(){
-        loadComments().then(render);
+  // Перевод на испанский — полностью автоматический, без кнопки: как
+  // только в загруженных комментариях находится хоть один без body_es
+  // (новый, или старый, ещё не переведённый), он тихо переводится в фоне
+  // и результат сохраняется в базу. translateAttempted — просто чтобы не
+  // долбить перевод повторно, пока предыдущая попытка ещё не завершилась
+  // или уже провалилась в рамках этой открытой вкладки.
+  var translateAttempted = {};
+  function autoTranslateMissing(){
+    if(!isOwnerTeam()) return; // переводить может только владелец/команда (см. RLS/edge function)
+    Object.keys(state.commentsByClient).forEach(function(clientId){
+      (state.commentsByClient[clientId] || []).forEach(function(cm){
+        if(!cm.body_es && !translateAttempted[cm.id]){
+          translateAttempted[cm.id] = true;
+          translateComment(cm.id, cm.body);
+        }
       });
-    }).catch(function(){ view.translating[commentId] = false; render(); });
+    });
+  }
+
+  function translateComment(commentId, text){
+    sb.functions.invoke("translate-comment", { body: { text: text } }).then(function(res){
+      if(res.error || !res.data || !res.data.es) return;
+      return sb.from("client_comments").update({ body_es: res.data.es }).eq("id", commentId).then(function(){
+        return loadComments().then(render);
+      });
+    }).catch(function(){});
   }
 
   function rotateAgentLink(){
@@ -1013,12 +1055,6 @@
       render(); return;
     }
     if(action === "send-comment"){ sendComment(btn.getAttribute("data-id")); return; }
-    if(action === "translate-comment"){
-      var tClientId = btn.getAttribute("data-id"), tCommentId = btn.getAttribute("data-cid");
-      var cm = (state.commentsByClient[tClientId] || []).filter(function(x){ return x.id === tCommentId; })[0];
-      if(cm){ translateComment(tClientId, tCommentId, cm.body); render(); }
-      return;
-    }
     if(action === "toggle-photo"){
       var pid = btn.getAttribute("data-id");
       view.expandedPhoto[pid] = !view.expandedPhoto[pid];
