@@ -242,6 +242,8 @@
       needsReviewTag:"от бота, нужна проверка", markReviewed:"Проверено",
       months:"мес.", years:"лет",
       who:"Кто проживает", kids:"дети", noKids:"без детей", pets:"питомцы", noPets:"без питомцев",
+      adultOne:"взрослый", adultsMany:"взрослых", childOne:"ребёнок", childrenMany:"детей", and:"и",
+      upTo:"до", moveInLabel:"заезд",
       statTotal:"Всего клиентов", statNew:"Новые за 7 дней", statFollowup:"Нужно связаться",
       loginTitle:"Вход в CRM", loginSubtitle:"Введите почту — пришлём ссылку для входа.",
       loginEmailPlaceholder:"you@example.com", loginSendLink:"Отправить ссылку",
@@ -284,6 +286,8 @@
       needsReviewTag:"del bot, necesita revisión", markReviewed:"Revisado",
       months:"meses", years:"años",
       who:"Quiénes viven", kids:"niños", noKids:"sin niños", pets:"mascotas", noPets:"sin mascotas",
+      adultOne:"adulto", adultsMany:"adultos", childOne:"hijo", childrenMany:"hijos", and:"y",
+      upTo:"hasta", moveInLabel:"ingreso",
       statTotal:"Clientes en total", statNew:"Nuevos (7 días)", statFollowup:"Necesitan seguimiento",
       loginTitle:"Ingresar al CRM", loginSubtitle:"Ingresá tu correo — te mandamos un enlace de acceso.",
       loginEmailPlaceholder:"you@example.com", loginSendLink:"Enviar enlace",
@@ -316,6 +320,32 @@
   var BEDROOM_KEYS = ["", "0", "1", "2", "3", "4plus"];
   function bedroomLabel(v){ if(v==="0") return t("studio"); if(v==="4plus") return t("plus4"); if(!v) return t("notSpecified"); return v; }
   function petTypeLabel(v){ if(v==="cat") return t("petCat"); if(v==="dog") return t("petDog"); if(v==="other") return t("petOther"); return ""; }
+
+  function joinAnd(arr){
+    arr = arr.slice();
+    if(arr.length <= 1) return arr.join("");
+    var last = arr.pop();
+    return arr.join(", ") + " " + t("and") + " " + last;
+  }
+  function whoSummary(c){
+    var n = c.adults || 0;
+    var adultsPart = n ? (n + " " + (n===1 ? t("adultOne") : t("adultsMany"))) : "";
+    var childrenPart;
+    if(c.has_children && (c.children_ages||[]).length){
+      var ages = (c.children_ages||[]).map(String);
+      var word = ages.length===1 ? t("childOne") : t("childrenMany");
+      childrenPart = ages.length + " " + word + " " + joinAnd(ages) + " " + t("years");
+    } else if(c.has_children){
+      childrenPart = t("childrenMany");
+    } else {
+      childrenPart = t("noKids");
+    }
+    var parts = [adultsPart, childrenPart].filter(Boolean).join(" + ");
+    var petsPart = c.has_pets
+      ? ([petTypeLabel(c.pet_type), c.pet_age].filter(Boolean).join(" ") || t("pets"))
+      : t("noPets");
+    return parts + (parts ? ", " : "") + petsPart;
+  }
 
   function loadJSON(key, fallback){ try{ var v = localStorage.getItem(key); return v==null?fallback:JSON.parse(v); }catch(e){ return fallback; } }
   function saveJSON(key, val){ try{ localStorage.setItem(key, JSON.stringify(val)); }catch(e){} }
@@ -508,20 +538,23 @@
   function renderCardView(c){
     var stale = c.status === "active" && (function(){ var d = daysSince(c.updated_at || c.added_at); return d != null && d >= 14; })();
     var areaNames = (c.area_ids||[]).map(areaLabel).concat(c.custom_areas || []);
+    var timelineParts = [];
+    if(c.move_in_date) timelineParts.push(t("moveInLabel") + " " + fmtDate(c.move_in_date));
+    if(c.months) timelineParts.push(c.months + " " + t("months"));
+    var timelineStr = timelineParts.join(", ");
+
     var summary = [
       "<b>" + esc(bedroomLabel(c.bedrooms)) + "</b> " + esc(t("fieldBedrooms").toLowerCase()),
-      c.budget_amount ? ("<b>" + esc(c.budget_amount) + " " + esc(c.budget_currency) + "</b>") : "",
+      c.budget_amount ? (esc(t("upTo")) + " <b>" + esc(c.budget_amount) + " " + esc(c.budget_currency) + "</b>") : "",
+      esc(timelineStr),
       areaNames.length ? esc(areaNames.join(", ")) : ""
     ].filter(Boolean).join(" · ");
 
     var icons = [];
-    icons.push("<span>" + t("who") + ": " + (c.adults||0) + "</span>");
-    icons.push("<span>" + (c.has_children ? (icon("smile") + esc((c.children_ages||[]).join(", "))) : t("noKids")) + "</span>");
+    icons.push("<span>" + icon("users") + esc(whoSummary(c)) + "</span>");
     if(c.pregnant) icons.push("<span>" + icon("heart") + t("fieldPregnant") + "</span>");
-    if(c.has_pets){
-      icons.push("<span>" + (c.pet_photo_url ? ('<img class="pet-thumb" src="'+esc(c.pet_photo_url)+'">') : icon("paw")) + esc([petTypeLabel(c.pet_type), c.pet_age].filter(Boolean).join(" ")) + "</span>");
-    } else {
-      icons.push("<span>" + t("noPets") + "</span>");
+    if(c.has_pets && c.pet_photo_url){
+      icons.push("<span><img class=\"pet-thumb\" src=\"" + esc(c.pet_photo_url) + "\"></span>");
     }
 
     var usernameHTML = "";
