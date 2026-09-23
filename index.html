@@ -246,7 +246,7 @@
       upTo:"до", moveInLabel:"заезд",
       bedroomWord1:"спальня", bedroomWord234:"спальни", bedroomWordMany:"спален",
       moveInFrom:"Заезд с", moveIn:"Заезд", rentalTerm:"Срок аренды",
-      showPhoto:"Показать фото", hidePhoto:"Скрыть фото", photoCopiedToast:"Ссылка на фото скопирована",
+      showPhoto:"Показать фото", hidePhoto:"Скрыть фото", photoCopiedToast:"Фото скопировано",
       translateComment:"Перевести на испанский",
       statTotal:"Всего клиентов", statNew:"Новые за 7 дней", statFollowup:"Нужно связаться",
       loginTitle:"Вход в CRM", loginSubtitle:"Введите почту — пришлём ссылку для входа.",
@@ -294,7 +294,7 @@
       upTo:"hasta", moveInLabel:"ingreso",
       bedroomWord1:"dormitorio", bedroomWord234:"dormitorios", bedroomWordMany:"dormitorios",
       moveInFrom:"Ingreso desde", moveIn:"Ingreso", rentalTerm:"Duración del alquiler",
-      showPhoto:"Mostrar foto", hidePhoto:"Ocultar foto", photoCopiedToast:"Enlace de la foto copiado",
+      showPhoto:"Mostrar foto", hidePhoto:"Ocultar foto", photoCopiedToast:"Foto copiada",
       translateComment:"Traducir al español",
       statTotal:"Clientes en total", statNew:"Nuevos (7 días)", statFollowup:"Necesitan seguimiento",
       loginTitle:"Ingresar al CRM", loginSubtitle:"Ingresá tu correo — te mandamos un enlace de acceso.",
@@ -353,14 +353,18 @@
   }
   function timelineLine(c){
     var parts = [];
-    if(c.move_in_text){
-      // Клиент описал срок своими словами ("с середины октября") — точной
-      // даты может не быть вовсе, показываем как есть, без выдумывания.
-      // Метка без "с" — сама формулировка клиента обычно уже содержит
-      // нужный предлог.
-      parts.push(esc(t("moveIn")) + ": " + esc(c.move_in_text));
-    } else if(c.move_in_date){
+    if(c.move_in_date){
+      // Точная дата известна — всегда показываем её как чистую короткую
+      // дату (1.10), а не вольную формулировку клиента, даже если она
+      // тоже сохранена.
       parts.push(esc(t("moveInFrom")) + " " + esc(fmtShortDate(c.move_in_date)));
+    } else if(c.move_in_text){
+      // Точной даты нет — показываем как клиент описал срок своими
+      // словами ("с середины октября"), без выдумывания даты. В испанском
+      // режиме — переведённую версию, если перевод уже готов (см.
+      // autoTranslateMissing), иначе как есть.
+      var mtext = (view.lang === "es" && c.move_in_text_es) ? c.move_in_text_es : c.move_in_text;
+      parts.push(esc(t("moveIn")) + ": " + esc(mtext));
     }
     if(c.months) parts.push(esc(t("rentalTerm")) + ": " + esc(c.months) + " " + esc(t("months")));
     return parts.join(" · ");
@@ -469,6 +473,34 @@
     toastTimer = setTimeout(function(){ el.classList.remove("show"); }, 2600);
   }
 
+  // Копирует саму картинку в буфер обмена (а не ссылку на неё), чтобы
+  // фото можно было сразу вставить, например, в сообщение клиенту.
+  // Скачиваем байты фото сами (fetch), а не через <img>, — так canvas не
+  // считается "испорченным" чужим доменом (Supabase Storage) и toBlob
+  // работает. Если браузер не поддерживает копирование картинок в буфер
+  // (например, старый Safari) или запрос не удался — тихо откатываемся к
+  // копированию ссылки, как раньше.
+  function copyImageToClipboard(url){
+    function fallbackToLink(){
+      navigator.clipboard.writeText(url).then(function(){ showToast(t("photoCopiedToast")); });
+    }
+    if(!navigator.clipboard || !window.ClipboardItem || !window.createImageBitmap){ fallbackToLink(); return; }
+    fetch(url).then(function(r){ return r.blob(); }).then(function(blob){
+      return createImageBitmap(blob).then(function(bitmap){
+        var canvas = document.createElement("canvas");
+        canvas.width = bitmap.width; canvas.height = bitmap.height;
+        canvas.getContext("2d").drawImage(bitmap, 0, 0);
+        return new Promise(function(resolve, reject){
+          canvas.toBlob(function(pngBlob){ pngBlob ? resolve(pngBlob) : reject(new Error("toBlob failed")); }, "image/png");
+        });
+      });
+    }).then(function(pngBlob){
+      return navigator.clipboard.write([new ClipboardItem({ "image/png": pngBlob })]);
+    }).then(function(){
+      showToast(t("photoCopiedToast"));
+    }).catch(fallbackToLink);
+  }
+
   var isOwnerTeam = function(){ return state.profile && (state.profile.role==="owner" || state.profile.role==="team"); };
   var isPartner = function(){ return state.profile && state.profile.role==="partner"; };
 
@@ -504,7 +536,14 @@
   function loadAgentLink(){
     if(!isOwnerTeam()) return Promise.resolve();
     return sb.from("agent_share_links").select("token,created_at").eq("revoked", false).order("created_at",{ascending:false}).limit(1).then(function(res){
-      state.agentLink = (res.data && res.data[0]) ? res.data[0].token : null;
+      var token = (res.data && res.data[0]) ? res.data[0].token : null;
+      if(token){ state.agentLink = token; return; }
+      // Ни одной активной ссылки ещё нет (например, самый первый заход) —
+      // создаём её сразу сами, чтобы поле никогда не пустовало и не
+      // требовало отдельного клика "Обновить ссылку".
+      return sb.rpc("create_agent_share_link").then(function(res2){
+        state.agentLink = (res2 && !res2.error) ? res2.data : null;
+      });
     });
   }
 
@@ -562,15 +601,16 @@
     // комментарии, но не могут ни писать, ни переводить.
     var canWrite = isOwnerTeam();
     // Перевод на испанский считается сам, в фоне (см. autoTranslateMissing)
-    // — без отдельной кнопки. Пока перевода ещё нет (обычно на секунду-две
-    // дольше самого комментария), просто ничего не показываем в этом месте.
+    // — без отдельной кнопки. Показываем только ОДИН язык за раз, по
+    // текущему переключателю: в русском режиме — русский текст, в
+    // испанском — перевод (а пока перевода ещё нет — на секунду-две
+    // дольше самого комментария — временно показываем русский, чтобы
+    // комментарий не пропадал из вида).
     var itemsHTML = list.length ? list.map(function(cm){
-      var esHTML = cm.body_es
-        ? '<div style="margin-top:4px;font-style:italic;color:var(--ink-faint);font-size:12px;">' + esc(cm.body_es) + '</div>'
-        : "";
+      var text = (view.lang === "es") ? (cm.body_es || cm.body) : cm.body;
       return '<div class="comment role-' + esc(cm.author_role||"team") + '">' +
-        '<div class="comment-meta">' + (cm.is_private ? icon("lock") : "") + esc(cm.author_name||"") + ' · ' + fmtDateTime(cm.created_at) + '</div>' +
-        esc(cm.body) + esHTML +
+        '<div class="comment-meta">' + (cm.is_private ? icon("lock") : "") + esc(cm.author_name||"") + '</div>' +
+        esc(text) +
       '</div>';
     }).join("") : '<div style="font-size:12.5px;color:var(--ink-faint);">' + t("noComments") + '</div>';
 
@@ -914,6 +954,13 @@
       // Ручное сохранение = ты проверила и поправила карточку, даже если её
       // создал бот — снимаем пометку "нужна проверка".
       payload.needs_review = false;
+      // Если текст "заезда своими словами" поменяли руками — старый
+      // испанский перевод больше не годится, сбрасываем, чтобы
+      // autoTranslateMissing тихо пересчитал его заново.
+      var orig = state.clients.filter(function(x){ return x.id === view.editingId; })[0];
+      if(orig && (orig.move_in_text || "") !== (payload.move_in_text || "")){
+        payload.move_in_text_es = null;
+      }
       p = sb.from("clients").update(payload).eq("id", view.editingId).select().single();
     }
     p.then(function(res){
@@ -962,31 +1009,55 @@
   }
 
   // Перевод на испанский — полностью автоматический, без кнопки: как
-  // только в загруженных комментариях находится хоть один без body_es
-  // (новый, или старый, ещё не переведённый), он тихо переводится в фоне
-  // и результат сохраняется в базу. translateAttempted — просто чтобы не
-  // долбить перевод повторно, пока предыдущая попытка ещё не завершилась
-  // или уже провалилась в рамках этой открытой вкладки.
+  // только находится комментарий без body_es или клиент с move_in_text без
+  // move_in_text_es (новый, или старый, ещё не переведённый), он тихо
+  // переводится в фоне и результат сохраняется в базу. translateAttempted
+  // — просто чтобы не долбить перевод повторно, пока предыдущая попытка
+  // ещё не завершилась или уже провалилась в рамках этой открытой вкладки.
   var translateAttempted = {};
   function autoTranslateMissing(){
     if(!isOwnerTeam()) return; // переводить может только владелец/команда (см. RLS/edge function)
     Object.keys(state.commentsByClient).forEach(function(clientId){
       (state.commentsByClient[clientId] || []).forEach(function(cm){
-        if(!cm.body_es && !translateAttempted[cm.id]){
-          translateAttempted[cm.id] = true;
+        var key = "c:" + cm.id;
+        if(!cm.body_es && !translateAttempted[key]){
+          translateAttempted[key] = true;
           translateComment(cm.id, cm.body);
         }
       });
     });
+    state.clients.forEach(function(c){
+      var key = "m:" + c.id;
+      if(c.move_in_text && !c.move_in_text_es && !translateAttempted[key]){
+        translateAttempted[key] = true;
+        translateMoveInText(c.id, c.move_in_text);
+      }
+    });
+  }
+
+  function translateText(text){
+    return sb.functions.invoke("translate-comment", { body: { text: text } }).then(function(res){
+      if(res.error || !res.data || !res.data.es) return null;
+      return res.data.es;
+    }).catch(function(){ return null; });
   }
 
   function translateComment(commentId, text){
-    sb.functions.invoke("translate-comment", { body: { text: text } }).then(function(res){
-      if(res.error || !res.data || !res.data.es) return;
-      return sb.from("client_comments").update({ body_es: res.data.es }).eq("id", commentId).then(function(){
+    translateText(text).then(function(es){
+      if(!es) return;
+      return sb.from("client_comments").update({ body_es: es }).eq("id", commentId).then(function(){
         return loadComments().then(render);
       });
-    }).catch(function(){});
+    });
+  }
+
+  function translateMoveInText(clientId, text){
+    translateText(text).then(function(es){
+      if(!es) return;
+      return sb.from("clients").update({ move_in_text_es: es }).eq("id", clientId).then(function(){
+        return loadClients().then(render);
+      });
+    });
   }
 
   function rotateAgentLink(){
@@ -1068,9 +1139,7 @@
     }
     if(action === "copy-photo-url"){
       var pc = state.clients.filter(function(x){ return x.id === btn.getAttribute("data-id"); })[0];
-      if(pc && pc.pet_photo_url){
-        navigator.clipboard.writeText(pc.pet_photo_url).then(function(){ showToast(t("photoCopiedToast")); });
-      }
+      if(pc && pc.pet_photo_url){ copyImageToClipboard(pc.pet_photo_url); }
       return;
     }
     if(action === "copy-agent-link"){

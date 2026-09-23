@@ -97,21 +97,23 @@
   function bedroomPhrase(v){
     if(!v) return esc(t("notSpecified"));
     if(v==="0") return "<b>" + esc(t("studio")) + "</b>";
-    if(v==="4plus") return "<b>4+</b> " + esc(t("bedroomWordMany"));
+    if(v==="4plus") return "<b>4+ " + esc(t("bedroomWordMany")) + "</b>";
     var n = parseInt(v,10);
     var word = n===1 ? t("bedroomWord1") : t("bedroomWord234");
-    return "<b>" + n + "</b> " + esc(word);
+    return "<b>" + n + " " + esc(word) + "</b>";
   }
   function timelineLine(c){
     var parts = [];
-    if(c.move_in_text){
-      parts.push(esc(t("moveIn")) + ": " + esc(c.move_in_text));
-    } else if(c.move_in_date){
+    if(c.move_in_date){
+      // Точная дата известна — показываем её, а не вольную формулировку.
       // Ручной разбор строки, не new Date() — см. комментарий в app.html:
       // Date-объект сдвигает день на -1 в часовых поясах западнее UTC.
       var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(c.move_in_date);
       var dateStr = m ? (parseInt(m[3],10) + "." + parseInt(m[2],10)) : c.move_in_date;
       parts.push(esc(t("moveInFrom")) + " " + esc(dateStr));
+    } else if(c.move_in_text){
+      var mtext = (lang === "es" && c.move_in_text_es) ? c.move_in_text_es : c.move_in_text;
+      parts.push(esc(t("moveIn")) + ": " + esc(mtext));
     }
     if(c.months) parts.push(esc(t("rentalTerm")) + ": " + esc(c.months) + " " + esc(t("months")));
     return parts.join(" · ");
