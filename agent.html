@@ -107,8 +107,10 @@
     if(c.move_in_text){
       parts.push(esc(t("moveIn")) + ": " + esc(c.move_in_text));
     } else if(c.move_in_date){
-      var d = new Date(c.move_in_date);
-      var dateStr = isNaN(d.getTime()) ? c.move_in_date : (d.getDate() + "." + (d.getMonth()+1));
+      // Ручной разбор строки, не new Date() — см. комментарий в app.html:
+      // Date-объект сдвигает день на -1 в часовых поясах западнее UTC.
+      var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(c.move_in_date);
+      var dateStr = m ? (parseInt(m[3],10) + "." + parseInt(m[2],10)) : c.move_in_date;
       parts.push(esc(t("moveInFrom")) + " " + esc(dateStr));
     }
     if(c.months) parts.push(esc(t("rentalTerm")) + ": " + esc(c.months) + " " + esc(t("months")));

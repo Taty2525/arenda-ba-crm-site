@@ -331,19 +331,25 @@
   function bedroomPhrase(v){
     if(!v) return esc(t("notSpecified"));
     if(v==="0") return "<b>" + esc(t("studio")) + "</b>";
-    if(v==="4plus") return "<b>4+</b> " + esc(t("bedroomWordMany"));
+    if(v==="4plus") return "<b>4+ " + esc(t("bedroomWordMany")) + "</b>";
     var n = parseInt(v,10);
     var word = n===1 ? t("bedroomWord1") : t("bedroomWord234");
-    return "<b>" + n + "</b> " + esc(word);
+    return "<b>" + n + " " + esc(word) + "</b>";
   }
   // Короткая дата без года ("1.10") — год почти всегда очевиден из
   // контекста (заезд обычно скоро), а лишняя "2026" только загромождает
   // карточку.
   function fmtShortDate(iso){
     if(!iso) return "";
-    var d = new Date(iso);
-    if(isNaN(d.getTime())) return iso;
-    return d.getDate() + "." + (d.getMonth()+1);
+    // Разбираем строку "YYYY-MM-DD" вручную, а не через new Date(iso) —
+    // date-only ISO-строка парсится как полночь UTC, а .getDate()/.getMonth()
+    // потом читают её в локальном часовом поясе браузера: в Аргентине
+    // (UTC-3) это даёт число на день МЕНЬШЕ, чем клиент реально написал
+    // (2 октября превращался в "1.10"). Ручной разбор этой проблемы не
+    // имеет вообще.
+    var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
+    if(!m) return iso;
+    return parseInt(m[3],10) + "." + parseInt(m[2],10);
   }
   function timelineLine(c){
     var parts = [];
@@ -367,30 +373,27 @@
     var last = arr.pop();
     return arr.join(", ") + " " + t("and") + " " + last;
   }
-  function whoSummary(c){
-    // Детей упоминаем отдельным "+"-пунктом только когда они ЕСТЬ. Когда
-    // детей нет, "без детей" не занимает свой отдельный пункт — прицепляем
-    // его к описанию питомцев в конце строки ("2 взрослых + кошка без
-    // детей"), а не пишем лишний "+ без детей".
+  // Три отдельные строки (взрослые / дети / питомцы), каждая со своей
+  // иконкой — вместо одной длинной слитной фразы.
+  function adultsLine(c){
     var n = c.adults || 0;
-    var mainParts = [];
-    if(n) mainParts.push(n + " " + (n===1 ? t("adultOne") : t("adultsMany")));
-
+    return n ? (n + " " + (n===1 ? t("adultOne") : t("adultsMany"))) : t("notSpecified");
+  }
+  function childrenLine(c){
     if(c.has_children && (c.children_ages||[]).length){
       var ages = (c.children_ages||[]).map(String);
       var word = ages.length===1 ? t("childOne") : t("childrenMany");
-      mainParts.push(ages.length + " " + word + " " + joinAnd(ages) + " " + t("years"));
-    } else if(c.has_children){
-      mainParts.push(t("childrenMany"));
+      return ages.length + " " + word + " " + joinAnd(ages) + " " + t("years");
     }
-
-    var petsPart = c.has_pets
-      ? ([petTypeLabel(c.pet_type), c.pet_age].filter(Boolean).join(" ") || t("pets"))
-      : t("noPets");
-    if(!c.has_children) petsPart += " " + t("noKids");
-    mainParts.push(petsPart);
-
-    return mainParts.join(" + ");
+    if(c.has_children) return t("childrenMany");
+    return t("noKids");
+  }
+  function petsLine(c){
+    if(!c.has_pets) return t("noPets");
+    // Отдельного поля "сколько питомцев" в базе нет — по умолчанию считаем
+    // одного (обычный случай), явно это не выясняя.
+    var typeAge = [petTypeLabel(c.pet_type), c.pet_age].filter(Boolean).join(" ") || t("pets");
+    return "1 " + typeAge;
   }
 
   function loadJSON(key, fallback){ try{ var v = localStorage.getItem(key); return v==null?fallback:JSON.parse(v); }catch(e){ return fallback; } }
@@ -601,13 +604,16 @@
       areaNames.length ? esc(areaNames.join(", ")) : ""
     ].filter(Boolean).join(" · ");
 
-    var icons = [];
-    icons.push("<span>" + icon("users") + esc(whoSummary(c)) + "</span>");
-    if(c.pregnant) icons.push("<span>" + icon("heart") + t("fieldPregnant") + "</span>");
+    // Три отдельные строки, каждая со своей иконкой — взрослые / дети /
+    // питомцы (+ кнопка "Фото" сразу в строке питомцев, если фото есть).
+    var adultsRow = '<div class="icon-row"><span>' + icon("users") + esc(adultsLine(c)) + (c.pregnant ? (" · " + icon("heart") + esc(t("fieldPregnant"))) : "") + '</span></div>';
+    var childrenRow = '<div class="icon-row"><span>' + icon("smile") + esc(childrenLine(c)) + '</span></div>';
+    var petPhotoBtn = "";
     if(c.has_pets && c.pet_photo_url){
       var photoOpen = !!view.expandedPhoto[c.id];
-      icons.push("<span><button type=\"button\" class=\"btn btn-sm btn-ghost\" style=\"padding:2px 8px;font-size:11.5px;\" data-action=\"toggle-photo\" data-id=\"" + c.id + "\">" + icon("image") + (photoOpen ? t("hidePhoto") : t("showPhoto")) + "</button></span>");
+      petPhotoBtn = ' <button type="button" class="btn btn-sm btn-ghost" style="padding:2px 8px;font-size:11.5px;" data-action="toggle-photo" data-id="' + c.id + '">' + icon("image") + (photoOpen ? t("hidePhoto") : t("showPhoto")) + '</button>';
     }
+    var petsRow = '<div class="icon-row"><span>' + icon("paw") + esc(petsLine(c)) + '</span>' + petPhotoBtn + '</div>';
     var timelineStr = timelineLine(c);
 
     var usernameHTML = "";
@@ -659,12 +665,12 @@
             '<div class="card-actions">' + actions + '</div>' +
           '</div>' +
           (summary ? '<div class="summary-line">' + summary + '</div>' : '') +
-          '<div class="icon-row">' + icons.join("") + '</div>' +
+          adultsRow + childrenRow + petsRow +
           (timelineStr ? '<div class="icon-row"><span>' + icon("clock") + timelineStr + '</span></div>' : '') +
           photoHTML +
-          '<div class="meta-line">' + t("added") + ' ' + esc(fmtDate(c.added_at)) + (c.updated_at && c.updated_at !== c.added_at ? (' · ' + t("updated") + ' ' + esc(fmtDate(c.updated_at))) : '') + '</div>' +
           '<div style="margin-top:10px;font-size:11px;font-weight:700;color:var(--ink-faint);text-transform:uppercase;letter-spacing:.03em;display:flex;align-items:center;gap:4px;">' + icon("chat") + t("commentsShow") + (commentCount ? " (" + commentCount + ")" : "") + '</div>' +
           renderComments(c.id) +
+          '<div class="meta-line">' + t("added") + ' ' + esc(fmtDate(c.added_at)) + (c.updated_at && c.updated_at !== c.added_at ? (' · ' + t("updated") + ' ' + esc(fmtDate(c.updated_at))) : '') + '</div>' +
         '</div>' +
       '</div>'
     );
