@@ -525,16 +525,24 @@
     }).catch(fallbackToLink);
   }
 
-  var isOwnerTeam = function(){ return state.profile && (state.profile.role==="owner" || state.profile.role==="team"); };
+  // owner — полный доступ (Татьяна, Даша и любой, кого Татьяна поднимет до
+  // owner). team — видит карточки клиентов БЕЗ контактов, не может ничего
+  // добавлять/редактировать/удалять, может только писать свои комментарии
+  // (всегда приватные, см. sendComment). isOwnerTeam() оставлен там, где
+  // владелец и команда ведут себя одинаково (видят вкладку, комментарии,
+  // статистику).
+  var isOwner = function(){ return state.profile && state.profile.role==="owner"; };
+  var isTeam = function(){ return state.profile && state.profile.role==="team"; };
+  var isOwnerTeam = function(){ return isOwner() || isTeam(); };
   var isPartner = function(){ return state.profile && state.profile.role==="partner"; };
 
   /* ---------- data ---------- */
   function loadClients(){
     var q;
-    if(isOwnerTeam()){
+    if(isOwner()){
       q = sb.from("clients").select("*").order("client_no", {ascending:false});
     } else {
-      q = sb.rpc("get_partner_clients");
+      q = sb.rpc("get_team_clients");
     }
     return q.then(function(res){
       if(res.error){ showToast(res.error.message); return; }
@@ -558,7 +566,7 @@
   }
 
   function loadAgentLink(){
-    if(!isOwnerTeam()) return Promise.resolve();
+    if(!isOwner()) return Promise.resolve();
     return sb.from("agent_share_links").select("token,created_at").eq("revoked", false).order("created_at",{ascending:false}).limit(1).then(function(res){
       var token = (res.data && res.data[0]) ? res.data[0].token : null;
       if(token){ state.agentLink = token; return; }
@@ -620,9 +628,10 @@
   /* ---------- render: comments ---------- */
   function renderComments(clientId){
     var list = state.commentsByClient[clientId] || [];
-    // Писать комментарии, видеть юзернейм клиента и писать ему напрямую —
-    // только владелец/команда. Партнёры видят общие (не приватные)
-    // комментарии, но не могут ни писать, ни переводить.
+    // Писать комментарии — владелец и команда. Владелец сам выбирает
+    // общий/приватный; у команды комментарий всегда приватный (виден
+    // только владельцу и команде, агентам — никогда, см. sendComment и
+    // RLS-политику на insert). Видеть юзернейм клиента может только owner.
     var canWrite = isOwnerTeam();
     // Перевод на испанский считается сам, в фоне (см. autoTranslateMissing)
     // — без отдельной кнопки. Показываем только ОДИН язык за раз, по
@@ -641,12 +650,12 @@
     var composeHTML = "";
     if(canWrite){
       if(view.composeOpen[clientId]){
-        var privToggle = isOwnerTeam() ? (
+        var privToggle = isOwner() ? (
           '<div class="seg" data-comment-priv-group="' + clientId + '">' +
             '<button type="button" class="' + (!view.newCommentPrivate[clientId]?"active":"") + '" data-action="set-comment-priv" data-id="' + clientId + '" data-priv="0">' + t("commentGeneral") + '</button>' +
             '<button type="button" class="' + (view.newCommentPrivate[clientId]?"active":"") + '" data-action="set-comment-priv" data-id="' + clientId + '" data-priv="1">' + icon("lock") + t("commentPrivate") + '</button>' +
           '</div>'
-        ) : '<span style="font-size:11.5px;color:var(--ink-faint);">' + t("commentGeneral") + '</span>';
+        ) : '<span style="font-size:11.5px;color:var(--ink-faint);">' + icon("lock") + t("commentPrivate") + '</span>';
         composeHTML =
           '<div class="comment-compose">' +
             '<textarea data-comment-input="' + clientId + '" placeholder="' + t("commentPlaceholder") + '" autofocus>' + esc(view.newComment[clientId]||"") + '</textarea>' +
@@ -687,13 +696,13 @@
     var timelineStr = timelineLine(c);
 
     var usernameHTML = "";
-    if(isOwnerTeam() && c.username){
+    if(isOwner() && c.username){
       var uname = c.username.replace(/^@/,"");
       usernameHTML = '<a class="username-tag" href="https://t.me/' + esc(uname) + '" target="_blank" rel="noopener">' + icon("chat") + '@' + esc(uname) + '</a>';
     }
 
     var actions = "";
-    if(isOwnerTeam()){
+    if(isOwner()){
       if(c.needs_review){
         actions += '<button class="btn btn-ghost btn-sm" data-action="mark-reviewed" data-id="' + c.id + '">' + icon("smile") + t("markReviewed") + '</button>';
       }
@@ -891,8 +900,8 @@
     }
 
     var agentLinkHTML = "";
-    if(isOwnerTeam()){
-      var linkUrl = state.agentLink ? ("https://taty2525.github.io/arenda-ba-crm-site/agent.html?token=" + encodeURIComponent(state.agentLink)) : "";
+    if(isOwner()){
+      var linkUrl = state.agentLink ? ("https://clients.nest.deal/agent.html?token=" + encodeURIComponent(state.agentLink)) : "";
       agentLinkHTML =
         '<div class="link-box">' +
           '<span style="font-size:12.5px;font-weight:700;color:var(--ink-soft);white-space:nowrap;">' + icon("link") + ' ' + t("agentLinkLabel") + '</span>' +
@@ -910,7 +919,7 @@
         '<div class="who-badge"><span class="role-pill ' + state.profile.role + '">' + t(roleKey) + '</span>' + esc(state.profile.email||"") + '</div>' +
         '<button class="btn btn-sm" data-action="toggle-lang">' + icon("globe") + t("langBtn") + '</button>' +
         '<button class="btn btn-sm btn-ghost" data-action="sign-out">' + icon("logOut") + t("signOut") + '</button>' +
-        (isOwnerTeam() ? '<button class="btn btn-primary" data-action="add-client">' + icon("plus") + t("addClient") + '</button>' : '') +
+        (isOwner() ? '<button class="btn btn-primary" data-action="add-client">' + icon("plus") + t("addClient") + '</button>' : '') +
       '</div></div>' +
 
       '<div class="wrap">' +
@@ -1046,7 +1055,9 @@
   function sendComment(clientId){
     var body = (view.newComment[clientId]||"").trim();
     if(!body) return;
-    var isPrivate = isOwnerTeam() ? !!view.newCommentPrivate[clientId] : false;
+    // Владелец сам выбирает общий/приватный; у команды — всегда приватный
+    // (дублируется проверкой на бэкенде в RLS-политике на insert).
+    var isPrivate = isOwner() ? !!view.newCommentPrivate[clientId] : true;
     sb.from("client_comments").insert({ client_id: clientId, body: body, is_private: isPrivate }).then(function(res){
       if(res.error){ showToast(t("saveErrorToast")); return; }
       view.newComment[clientId] = "";
@@ -1065,7 +1076,7 @@
   // ещё не завершилась или уже провалилась в рамках этой открытой вкладки.
   var translateAttempted = {};
   function autoTranslateMissing(){
-    if(!isOwnerTeam()) return; // переводить может только владелец/команда (см. RLS/edge function)
+    if(!isOwner()) return; // переводить может только владелец (команда клиентов не редактирует, а её комментарии всегда приватные — переводить незачем)
     Object.keys(state.commentsByClient).forEach(function(clientId){
       (state.commentsByClient[clientId] || []).forEach(function(cm){
         var key = "c:" + cm.id;
