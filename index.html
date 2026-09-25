@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ru">
+<html lang="es">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -30,6 +30,7 @@
   body{margin:0;background:var(--bg);color:var(--ink);font-family:"Nunito","IBM Plex Sans",system-ui,sans-serif;-webkit-font-smoothing:antialiased;}
   .wrap{max-width:840px;margin:0 auto;padding:0 20px;}
   h1,h2{font-family:"Nunito",system-ui,sans-serif;font-weight:800;margin:0;}
+  .num{font-variant-numeric:tabular-nums;}
   .icon{width:15px;height:15px;flex-shrink:0;display:inline-block;vertical-align:-3px;}
   button{font:inherit;cursor:pointer;}
   .topbar{position:sticky;top:0;z-index:20;background:color-mix(in srgb, var(--bg) 90%, transparent);backdrop-filter:blur(10px);border-bottom:1px solid var(--border-soft);}
@@ -39,21 +40,37 @@
   .brand h1{font-size:19px;letter-spacing:-.01em;}
   .btn{display:inline-flex;align-items:center;gap:6px;border-radius:10px;border:1px solid var(--border);background:var(--surface);color:var(--ink);padding:8px 12px;font-size:13px;font-weight:600;}
   .btn:hover{border-color:var(--accent);}
+  .btn-ghost{border-color:transparent;background:transparent;}
+  .btn-ghost:hover{background:var(--surface-2);border-color:transparent;}
+  .btn-sm{padding:6px 10px;font-size:12.5px;border-radius:8px;}
   .list{display:flex;flex-direction:column;gap:12px;padding:16px 0 40px;}
-  .card{background:var(--surface);border:1px solid var(--border-soft);border-radius:var(--radius);box-shadow:var(--shadow);padding:14px 18px;}
-  .card-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
-  .client-no{font-size:11.5px;font-weight:700;color:var(--ink-faint);}
+  .empty{padding:60px 20px;text-align:center;color:var(--ink-soft);}
+  .error{padding:60px 20px;text-align:center;color:var(--ink-soft);}
+
+  .card{background:var(--surface);border:1px solid var(--border-soft);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden;}
+  .card-bar{display:flex;}
+  .status-stripe{width:4px;flex-shrink:0;}
+  .status-stripe.active{background:var(--status-active);}
+  .card-num{flex-shrink:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;width:46px;padding:14px 4px;background:var(--surface-2);border-right:1px solid var(--border-soft);}
+  .card-num .card-num-value{font-size:20px;font-weight:800;color:var(--ink);line-height:1;}
+  .card-num .card-num-label{font-size:9px;font-weight:700;color:var(--ink-faint);text-transform:uppercase;letter-spacing:.03em;}
+  .card-body{flex:1;padding:14px 18px;min-width:0;}
+
+  .avatar{width:38px;height:38px;border-radius:11px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13.5px;color:#fff;flex-shrink:0;letter-spacing:.01em;overflow:hidden;}
+  .card-head{display:flex;align-items:flex-start;gap:12px;flex-wrap:wrap;}
+  .card-name-wrap{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
   .card-name{font-size:15.5px;font-weight:700;}
-  .chip{display:inline-flex;align-items:center;font-size:11.5px;font-weight:700;padding:3px 9px;border-radius:999px;background:var(--status-active-soft);color:var(--status-active);}
+  .chip{display:inline-flex;align-items:center;gap:4px;font-size:11.5px;font-weight:700;padding:3px 9px;border-radius:999px;letter-spacing:.02em;}
+  .chip-active{background:var(--status-active-soft);color:var(--status-active);}
   .summary-line{margin-top:8px;font-size:13.5px;color:var(--ink-soft);}
   .summary-line b{color:var(--ink);font-weight:700;}
-  .icon-row{display:flex;gap:10px;margin-top:8px;font-size:12.5px;color:var(--ink-soft);flex-wrap:wrap;}
+  .icon-row{display:flex;gap:10px;margin-top:8px;font-size:12.5px;color:var(--ink-soft);flex-wrap:wrap;align-items:center;}
   .icon-row span{display:inline-flex;align-items:center;gap:4px;}
   .pet-thumb{width:26px;height:26px;border-radius:7px;object-fit:cover;border:1px solid var(--border);vertical-align:middle;}
   .comments{margin-top:10px;padding-top:10px;border-top:1px dashed var(--border);display:flex;flex-direction:column;gap:6px;}
   .comment{background:var(--accent-soft);color:var(--accent-soft-ink);border-radius:10px;padding:7px 10px;font-size:12.5px;line-height:1.4;}
-  .empty{padding:60px 20px;text-align:center;color:var(--ink-soft);}
-  .error{padding:60px 20px;text-align:center;color:var(--ink-soft);}
+  .toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 18px;border-radius:999px;font-size:13px;font-weight:600;box-shadow:var(--shadow);z-index:50;opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(-4px);}
 </style>
 </head>
 <body>
@@ -68,21 +85,29 @@
   var STRINGS = {
     ru:{ title:"Активные поиски", langBtn:"ES", fieldBedrooms:"Спальни", notSpecified:"не указано", studio:"Студия", plus4:"4+",
       bedroomWord1:"спальня", bedroomWord234:"спальни", bedroomWordMany:"спален",
-      moveInFrom:"Заезд с", moveIn:"Заезд", rentalTerm:"Срок аренды", months:"мес.",
-      who:"Кто проживает", noKids:"без детей", noPets:"без питомцев",
+      moveInFrom:"Заезд с", moveIn:"Заезд", rentalTerm:"Срок аренды", months:"мес.", years:"лет",
+      noKids:"без детей", noPets:"без питомцев", pets:"питомцы",
+      adultOne:"взрослый", adultsMany:"взрослых", childOne:"ребёнок", childrenMany:"детей", and:"и",
+      upTo:"до",
       petCat:"Кошка", petDog:"Собака", petOther:"Другое", petCatPlural:"Кошки", petDogPlural:"Собаки", petOtherPlural:"Другое",
-      fieldPregnant:"Беременность", empty:"Активных поисков пока нет.", errorTitle:"Доступ временно закрыт",
+      fieldPregnant:"Беременность", showPhoto:"Показать фото", hidePhoto:"Скрыть фото",
+      copyLink:"Копировать", photoCopiedToast:"Фото скопировано",
+      empty:"Активных поисков пока нет.", errorTitle:"Доступ временно закрыт",
       errorBody:"Обратитесь к Татьяне." },
     es:{ title:"Búsquedas activas", langBtn:"RU", fieldBedrooms:"Dormitorios", notSpecified:"sin especificar", studio:"Monoambiente", plus4:"4+",
       bedroomWord1:"dormitorio", bedroomWord234:"dormitorios", bedroomWordMany:"dormitorios",
-      moveInFrom:"Ingreso desde", moveIn:"Ingreso", rentalTerm:"Duración del alquiler", months:"meses",
-      who:"Quiénes viven", noKids:"sin niños", noPets:"sin mascotas",
+      moveInFrom:"Ingreso desde", moveIn:"Ingreso", rentalTerm:"Duración del alquiler", months:"meses", years:"años",
+      noKids:"sin niños", noPets:"sin mascotas", pets:"mascotas",
+      adultOne:"adulto", adultsMany:"adultos", childOne:"niño", childrenMany:"niños", and:"y",
+      upTo:"hasta",
       petCat:"Gato", petDog:"Perro", petOther:"Otro", petCatPlural:"Gatos", petDogPlural:"Perros", petOtherPlural:"Otro",
-      fieldPregnant:"Embarazo", empty:"Todavía no hay búsquedas activas.", errorTitle:"Acceso cerrado temporalmente",
+      fieldPregnant:"Embarazo", showPhoto:"FOTO", hidePhoto:"Ocultar foto",
+      copyLink:"Copiar", photoCopiedToast:"Foto copiada",
+      empty:"Todavía no hay búsquedas activas.", errorTitle:"Acceso cerrado temporalmente",
       errorBody:"Contactá a Tatiana." }
   };
-  var lang = (localStorage.getItem("agent_lang_v1") || "ru");
-  function t(k){ return (STRINGS[lang]||STRINGS.ru)[k] || k; }
+  var lang = (localStorage.getItem("agent_lang_v1") || "es");
+  function t(k){ return (STRINGS[lang]||STRINGS.es)[k] || k; }
 
   var AREAS = [
     {id:"palermo", ru:"Палермо", es:"Palermo"}, {id:"recoleta", ru:"Реколета", es:"Recoleta"},
@@ -132,35 +157,113 @@
     if(v==="other") return plural ? t("petOtherPlural") : t("petOther");
     return "";
   }
+  function joinAnd(arr){
+    arr = arr.slice();
+    if(arr.length <= 1) return arr.join("");
+    var last = arr.pop();
+    return arr.join(", ") + " " + t("and") + " " + last;
+  }
   function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g, function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); }
   function fmtAge(n){ return String(n).replace(".", ","); }
 
+  // Три отдельные строки (взрослые / дети / питомцы) — тот же формат, что
+  // и в общем CRM (app.html), чтобы карточка выглядела одинаково.
+  function adultsLine(c){
+    var n = c.adults || 0;
+    return n ? (n + " " + (n===1 ? t("adultOne") : t("adultsMany"))) : t("notSpecified");
+  }
+  function childrenLine(c){
+    if(c.has_children && (c.children_ages||[]).length){
+      var ages = (c.children_ages||[]).map(fmtAge);
+      var word = ages.length===1 ? t("childOne") : t("childrenMany");
+      return ages.length + " " + word + " " + joinAnd(ages) + " " + t("years");
+    }
+    if(c.has_children) return t("childrenMany");
+    return t("noKids");
+  }
+  function petsLine(c){
+    if(!c.has_pets) return t("noPets");
+    var count = c.pet_count || 1;
+    var typeAge = [petTypeLabel(c.pet_type, count), c.pet_age].filter(Boolean).join(" ") || t("pets");
+    return count + " " + typeAge;
+  }
+
+  var AVATAR_PALETTE = ["#3B6FE0","#2FB6B0","#7C6FEE","#2451B8","#4F7FE8","#0E8F91"];
+  function avatarColor(name){ var s=String(name||"?"),h=0; for(var i=0;i<s.length;i++){h=(h*31+s.charCodeAt(i))>>>0;} return AVATAR_PALETTE[h%AVATAR_PALETTE.length]; }
+  function initials(name){ var parts=String(name||"").trim().split(/\s+/).filter(Boolean); if(!parts.length) return "?"; var a=parts[0].charAt(0),b=parts.length>1?parts[1].charAt(0):""; return (a+b).toUpperCase(); }
+
   var ICON_house = '<path d="M4 11.5 12 4l8 7.5"/><path d="M6 10.5V20a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V10.5"/><path d="M10 21v-6h4v6"/>';
   var ICON_clock = '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3.5 2"/>';
+  var ICON_users = '<circle cx="9" cy="8" r="3.2"/><path d="M3.5 20a5.5 5.5 0 0 1 11 0"/><circle cx="17" cy="9" r="2.6"/><path d="M15 20a4.5 4.5 0 0 1 6.5-4"/>';
   var ICON_smile = '<circle cx="12" cy="12" r="8.5"/><path d="M8.3 13.8c1 1.3 2.2 2 3.7 2s2.7-.7 3.7-2"/><circle cx="9" cy="10" r=".9" fill="currentColor" stroke="none"/><circle cx="15" cy="10" r=".9" fill="currentColor" stroke="none"/>';
   var ICON_heart = '<path d="M12 21c-4.5-3-9-6.4-9-11a5 5 0 0 1 9-3 5 5 0 0 1 9 3c0 4.6-4.5 8-9 11z"/>';
   var ICON_paw = '<circle cx="12" cy="15.2" r="3.4"/><circle cx="6" cy="10" r="1.7"/><circle cx="10" cy="6.3" r="1.7"/><circle cx="14" cy="6.3" r="1.7"/><circle cx="18" cy="10" r="1.7"/>';
   var ICON_globe = '<circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17"/><path d="M12 3.5c2.6 2.4 4 5.4 4 8.5s-1.4 6.1-4 8.5c-2.6-2.4-4-5.4-4-8.5s1.4-6.1 4-8.5z"/>';
+  var ICON_image = '<rect x="3.5" y="4.5" width="17" height="15" rx="2"/><circle cx="9" cy="10" r="1.6"/><path d="M4 17l5-5 4 4 3-3 4 4"/>';
+  var ICON_copy = '<rect x="8.5" y="8.5" width="11" height="11" rx="2"/><path d="M6 15.5H5a1.5 1.5 0 0 1-1.5-1.5V5A1.5 1.5 0 0 1 5 3.5h9A1.5 1.5 0 0 1 15.5 5v1"/>';
   function icon(p){ return '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + p + '</svg>'; }
+
+  var expandedPhoto = {};
+
+  var toastTimer = null;
+  function showToast(msg){
+    var el = document.getElementById("toast");
+    if(!el) return;
+    el.textContent = msg; el.classList.add("show");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function(){ el.classList.remove("show"); }, 2600);
+  }
+  // Копируем саму картинку в буфер обмена (как в общем CRM); если браузер
+  // не поддерживает копирование картинок — тихо откатываемся к ссылке.
+  function copyImageToClipboard(url){
+    function fallbackToLink(){
+      navigator.clipboard.writeText(url).then(function(){ showToast(t("photoCopiedToast")); });
+    }
+    if(!navigator.clipboard || !window.ClipboardItem || !window.createImageBitmap){ fallbackToLink(); return; }
+    fetch(url).then(function(r){ return r.blob(); }).then(function(blob){
+      return createImageBitmap(blob);
+    }).then(function(bitmap){
+      var canvas = document.createElement("canvas");
+      canvas.width = bitmap.width; canvas.height = bitmap.height;
+      var ctx = canvas.getContext("2d");
+      ctx.drawImage(bitmap, 0, 0);
+      return new Promise(function(resolve){ canvas.toBlob(resolve, "image/png"); });
+    }).then(function(pngBlob){
+      return navigator.clipboard.write([new ClipboardItem({ "image/png": pngBlob })]);
+    }).then(function(){
+      showToast(t("photoCopiedToast"));
+    }).catch(fallbackToLink);
+  }
 
   function renderCard(c, displayNo){
     var areaNames = (c.area_ids||[]).map(areaLabel).concat(c.custom_areas || []);
     var summary = [
       bedroomPhrase(c.bedrooms),
-      c.budget_amount ? ("<b>" + esc(c.budget_amount) + " " + esc(c.budget_currency) + "</b>") : "",
+      c.budget_amount ? (esc(t("upTo")) + " <b>" + esc(c.budget_amount) + " " + esc(c.budget_currency) + "</b>") : "",
       areaNames.length ? esc(areaNames.join(", ")) : ""
     ].filter(Boolean).join(" · ");
-    var icons = [];
-    icons.push("<span>" + t("who") + ": " + (c.adults||0) + "</span>");
-    icons.push("<span>" + (c.has_children ? (icon(ICON_smile) + esc((c.children_ages||[]).map(fmtAge).join(", "))) : t("noKids")) + "</span>");
-    if(c.pregnant) icons.push("<span>" + icon(ICON_heart) + t("fieldPregnant") + "</span>");
-    if(c.has_pets){
-      var petCount = c.pet_count || 1;
-      icons.push("<span>" + (c.pet_photo_url ? ('<img class="pet-thumb" src="'+esc(c.pet_photo_url)+'">') : icon(ICON_paw)) + esc(petCount + " " + [petTypeLabel(c.pet_type, petCount), c.pet_age].filter(Boolean).join(" ")) + "</span>");
-    } else {
-      icons.push("<span>" + t("noPets") + "</span>");
+
+    var adultsRow = '<div class="icon-row"><span>' + icon(ICON_users) + esc(adultsLine(c)) + (c.pregnant ? (" · " + icon(ICON_heart) + esc(t("fieldPregnant"))) : "") + '</span></div>';
+    var childrenRow = '<div class="icon-row"><span>' + icon(ICON_smile) + esc(childrenLine(c)) + '</span></div>';
+    var petPhotoBtn = "";
+    if(c.has_pets && c.pet_photo_url){
+      var photoOpen = !!expandedPhoto[c.id];
+      petPhotoBtn = ' <button type="button" class="btn btn-sm btn-ghost" style="padding:2px 8px;font-size:11.5px;" data-action="toggle-photo" data-id="' + c.id + '">' + icon(ICON_image) + (photoOpen ? t("hidePhoto") : t("showPhoto")) + '</button>';
     }
+    var petsRow = '<div class="icon-row"><span>' + icon(ICON_paw) + esc(petsLine(c)) + '</span>' + petPhotoBtn + '</div>';
     var timelineStr = timelineLine(c);
+
+    var avatarHTML = '<div class="avatar" style="background:' + avatarColor(c.display_name) + '">' + esc(initials(c.display_name)) + '</div>';
+
+    var photoHTML = "";
+    if(c.has_pets && c.pet_photo_url && expandedPhoto[c.id]){
+      photoHTML =
+        '<div class="icon-row" style="align-items:flex-start;">' +
+          '<img src="' + esc(c.pet_photo_url) + '" style="max-width:220px;max-height:220px;border-radius:10px;border:1px solid var(--border);object-fit:cover;">' +
+          '<button type="button" class="btn btn-sm" data-action="copy-photo-url" data-id="' + c.id + '">' + icon(ICON_copy) + t("copyLink") + '</button>' +
+        '</div>';
+    }
+
     var comments = (c.general_comments || []);
     var commentsHTML = comments.length ? ('<div class="comments">' + comments.map(function(cm){
       var text = (lang === "es" && cm.body_es) ? cm.body_es : cm.body;
@@ -168,21 +271,36 @@
     }).join("") + '</div>') : "";
 
     return (
-      '<div class="card">' +
-        '<div class="card-head">' +
-          '<span class="client-no">№' + esc(displayNo) + '</span>' +
-          '<div class="card-name">' + esc(c.display_name || "—") + '</div>' +
-          '<span class="chip">' + (lang==="es"?"Activo":"Активный") + '</span>' +
+      '<div class="card"><div class="card-bar">' +
+        '<div class="status-stripe active"></div>' +
+        '<div class="card-num"><div class="card-num-value num">' + esc(displayNo) + '</div><div class="card-num-label">№</div></div>' +
+        '<div class="card-body">' +
+          '<div class="card-head">' +
+            avatarHTML +
+            '<div class="card-name-wrap">' +
+              '<div class="card-name">' + esc(c.display_name || "—") + '</div>' +
+              '<span class="chip chip-active">' + (lang==="es"?"Activo":"Активный") + '</span>' +
+            '</div>' +
+          '</div>' +
+          (summary ? '<div class="summary-line">' + summary + '</div>' : '') +
+          adultsRow + childrenRow + petsRow +
+          (timelineStr ? '<div class="icon-row"><span>' + icon(ICON_clock) + timelineStr + '</span></div>' : '') +
+          photoHTML +
+          commentsHTML +
         '</div>' +
-        (summary ? '<div class="summary-line">' + summary + '</div>' : '') +
-        '<div class="icon-row">' + icons.join("") + '</div>' +
-        (timelineStr ? '<div class="icon-row"><span>' + icon(ICON_clock) + timelineStr + '</span></div>' : '') +
-        commentsHTML +
-      '</div>'
+      '</div></div>'
     );
   }
 
-  function render(clients, errored){
+  // clients/errored живут вне render(), а не как параметры — иначе при
+  // каждом вызове render() на #app навешивался бы ещё один click-листенер
+  // (сам #app не пересоздаётся, меняется только его innerHTML), и клики
+  // срабатывали бы по несколько раз подряд.
+  var curClients = [];
+  var curErrored = false;
+
+  function render(){
+    var clients = curClients, errored = curErrored;
     var html =
       '<div class="topbar"><div class="wrap topbar-inner">' +
         '<div class="brand"><div class="brand-mark">' + icon(ICON_house) + '</div><h1>Аренда БА</h1></div>' +
@@ -199,20 +317,37 @@
       clients.slice().sort(function(a,b){ return (a.client_no||0) - (b.client_no||0); }).forEach(function(c,i){ rankMap[c.id] = i+1; });
       html += '<div class="list">' + clients.map(function(c){ return renderCard(c, rankMap[c.id]); }).join("") + '</div>';
     }
-    html += '</div>';
+    html += '</div><div class="toast" id="toast"></div>';
     document.getElementById("app").innerHTML = html;
     document.getElementById("lang-btn").addEventListener("click", function(){
       lang = lang === "ru" ? "es" : "ru";
       localStorage.setItem("agent_lang_v1", lang);
-      render(clients, errored);
+      render();
     });
   }
+
+  document.getElementById("app").addEventListener("click", function(ev){
+    var btn = ev.target.closest("[data-action]");
+    if(!btn) return;
+    var action = btn.getAttribute("data-action");
+    var pid = btn.getAttribute("data-id");
+    if(action === "toggle-photo"){
+      expandedPhoto[pid] = !expandedPhoto[pid];
+      render();
+      return;
+    }
+    if(action === "copy-photo-url"){
+      var pc = curClients.filter(function(x){ return x.id === pid; })[0];
+      if(pc && pc.pet_photo_url){ copyImageToClipboard(pc.pet_photo_url); }
+      return;
+    }
+  });
 
   // Постоянная ссылка без токена в адресе — доступ включён/выключен целиком
   // (см. set_agent_access() в базе), а не по отдельным ссылкам на агента.
   sb.rpc("get_public_agent_clients").then(function(res){
-    if(res.error || !res.data){ render([], true); return; }
-    render(res.data, false);
+    if(res.error || !res.data){ curErrored = true; render(); return; }
+    curClients = res.data; render();
   });
 })();
 </script>
