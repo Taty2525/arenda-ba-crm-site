@@ -313,9 +313,14 @@
     } else if(!clients.length){
       html += '<div class="empty">' + t("empty") + '</div>';
     } else {
-      var rankMap = {};
-      clients.slice().sort(function(a,b){ return (a.client_no||0) - (b.client_no||0); }).forEach(function(c,i){ rankMap[c.id] = i+1; });
-      html += '<div class="list">' + clients.map(function(c){ return renderCard(c, rankMap[c.id]); }).join("") + '</div>';
+      // Номер клиента (display_no) больше не считается тут на лету — это
+      // та же persisted-колонка, что видно в общем CRM (app.html), отдаётся
+      // напрямую функцией get_public_agent_clients(). Раньше номер агентам
+      // считался отдельно (позиция в списке ТОЛЬКО активных клиентов),
+      // из-за чего мог не совпадать с номером в CRM у команды — теперь
+      // везде одно и то же число. Порядок карточек — как отдаёт сама
+      // функция (по client_no по убыванию, как и в общем CRM).
+      html += '<div class="list">' + clients.map(function(c){ return renderCard(c, c.display_no); }).join("") + '</div>';
     }
     html += '</div><div class="toast" id="toast"></div>';
     document.getElementById("app").innerHTML = html;
