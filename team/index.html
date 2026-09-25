@@ -217,7 +217,7 @@
   var STRINGS = {
     ru: {
       addClient:"Добавить клиента", searchPlaceholder:"Поиск по имени, району, заметкам…",
-      tabActive:"Активные", tabInactive:"Неактивные", tabArchived:"Архив",
+      tabActive:"Клиенты", tabArchived:"Архив",
       langBtn:"ES", statusActive:"Активный", statusInactive:"Неактивный",
       sectionTelegram:"Telegram", sectionProfile:"Профиль клиента", sectionSearch:"Параметры поиска", sectionPhoto:"Фото питомца",
       fieldDisplayName:"Имя в Telegram", fieldUsername:"Никнейм (видно только вам)",
@@ -236,8 +236,7 @@
       save:"Сохранить", cancel:"Отмена", edit:"Изменить", del:"Удалить",
       makeActive:"Сделать активным", makeInactive:"В неактивные", archiveNow:"В архив",
       confirmDelete:"Удалить безвозвратно?", yes:"Да, удалить", no:"Отмена",
-      emptyActive:"Активных клиентов пока нет. Нажмите «Добавить клиента».",
-      emptyInactive:"Здесь пока пусто — сюда попадут клиенты со статусом «неактивный».",
+      emptyActive:"Клиентов пока нет. Нажмите «Добавить клиента».",
       emptyArchived:"В архиве пока никого нет.",
       saveErrorToast:"Не удалось сохранить, попробуйте ещё раз.", savedToast:"Сохранено",
       staleTag:"давно не было контакта", added:"добавлен", updated:"обновлён",
@@ -251,7 +250,7 @@
       moveInFrom:"Заезд с", moveIn:"Заезд", rentalTerm:"Срок аренды",
       showPhoto:"Показать фото", hidePhoto:"Скрыть фото", photoCopiedToast:"Фото скопировано",
       translateComment:"Перевести на испанский",
-      statTotal:"Всего клиентов", statNew:"Новые за 7 дней", statFollowup:"Нужно связаться",
+      statTotal:"Всего клиентов", statNew:"Новые за 7 дней",
       loginTitle:"Вход в CRM", loginSubtitle:"Введите почту — пришлём ссылку для входа.",
       loginEmailPlaceholder:"you@example.com", loginSendLink:"Отправить ссылку",
       loginCheckEmail:"Проверьте почту и перейдите по ссылке для входа.",
@@ -269,7 +268,7 @@
     },
     es: {
       addClient:"Agregar cliente", searchPlaceholder:"Buscar por nombre, barrio, notas…",
-      tabActive:"Activos", tabInactive:"Inactivos", tabArchived:"Archivo",
+      tabActive:"Clientes", tabArchived:"Archivo",
       langBtn:"RU", statusActive:"Activo", statusInactive:"Inactivo",
       sectionTelegram:"Telegram", sectionProfile:"Perfil del cliente", sectionSearch:"Parámetros de búsqueda", sectionPhoto:"Foto de la mascota",
       fieldDisplayName:"Nombre en Telegram", fieldUsername:"Usuario (solo lo ves vos)",
@@ -288,8 +287,7 @@
       save:"Guardar", cancel:"Cancelar", edit:"Editar", del:"Eliminar",
       makeActive:"Marcar activo", makeInactive:"Marcar inactivo", archiveNow:"Archivar",
       confirmDelete:"¿Eliminar sin posibilidad de recuperar?", yes:"Sí, eliminar", no:"Cancelar",
-      emptyActive:"Todavía no hay clientes activos. Tocá «Agregar cliente».",
-      emptyInactive:"Vacío por ahora — acá van a aparecer los clientes marcados «inactivo».",
+      emptyActive:"Todavía no hay clientes. Tocá «Agregar cliente».",
       emptyArchived:"Todavía no hay nadie en el archivo.",
       saveErrorToast:"No se pudo guardar, intentá de nuevo.", savedToast:"Guardado",
       staleTag:"sin contacto hace tiempo", added:"agregado", updated:"actualizado",
@@ -303,7 +301,7 @@
       moveInFrom:"Ingreso desde", moveIn:"Ingreso", rentalTerm:"Duración del alquiler",
       showPhoto:"Mostrar foto", hidePhoto:"Ocultar foto", photoCopiedToast:"Foto copiada",
       translateComment:"Traducir al español",
-      statTotal:"Clientes en total", statNew:"Nuevos (7 días)", statFollowup:"Necesitan seguimiento",
+      statTotal:"Clientes en total", statNew:"Nuevos (7 días)",
       loginTitle:"Ingresar al CRM", loginSubtitle:"Ingresá tu correo — te mandamos un enlace de acceso.",
       loginEmailPlaceholder:"you@example.com", loginSendLink:"Enviar enlace",
       loginCheckEmail:"Revisá tu correo y hacé clic en el enlace para ingresar.",
@@ -891,20 +889,22 @@
     // если он и был там до перерисовки.
     var searchWasFocused = document.activeElement && document.activeElement.id === "f-search";
 
-    // Архивные клиенты (archived_at != null) больше не входят в
-    // активные/неактивные вкладки — у них своя, отдельная вкладка "Архив"
-    // (только просмотр). Номер клиента (displayNo) — больше НЕ считается
+    // Активные и неактивные клиенты живут в ОДНОМ общем списке (вкладка
+    // "Клиенты") — неактивность видна только по красной пометке на самой
+    // карточке, клиент НЕ пропадает из виду при пометке "В неактивные".
+    // Пропадает клиент из этого списка только когда уходит в архив
+    // (вручную или автоматически через 7 дней) — тогда он виден только во
+    // вкладке "Архив". Номер клиента (displayNo) — больше НЕ считается
     // на лету: это persisted-колонка `display_no` из базы, которая
     // назначается новому клиенту триггером и пересчитывается по
     // понедельникам (см. renumber_active_clients() в базе и раздел про
     // нумерацию в claude/ui-conventions.md) — поэтому при архивации
     // клиента номера остальных НЕ сдвигаются сразу же, только в
     // ближайший понедельник.
-    var actives = state.clients.filter(function(c){ return c.status==="active" && !c.archived_at; });
-    var inactives = state.clients.filter(function(c){ return c.status==="inactive" && !c.archived_at; });
+    var working = state.clients.filter(function(c){ return !c.archived_at; });
     var archiveds = state.clients.filter(function(c){ return !!c.archived_at; });
-    var list = view.tab === "active" ? actives : view.tab === "inactive" ? inactives : archiveds;
     var isArchiveTab = view.tab === "archived";
+    var list = isArchiveTab ? archiveds : working;
 
     if(view.search.trim()){
       var q = view.search.trim().toLowerCase();
@@ -924,19 +924,18 @@
     if(view.editingId === "new"){
       cardsHTML = '<div class="card" data-card="new"><div class="card-bar"><div class="status-stripe active"></div><div class="card-body">' + renderForm() + '</div></div></div>' + cardsHTML;
     }
-    if(!cardsHTML){ cardsHTML = '<div class="empty">' + (view.tab==="active" ? t("emptyActive") : view.tab==="inactive" ? t("emptyInactive") : t("emptyArchived")) + '</div>'; }
+    if(!cardsHTML){ cardsHTML = '<div class="empty">' + (isArchiveTab ? t("emptyArchived") : t("emptyActive")) + '</div>'; }
 
     var newCount = state.clients.filter(function(c){ var d = daysSince(c.added_at); return d != null && d <= 7; }).length;
-    var staleCount = actives.filter(function(c){ var d = daysSince(c.updated_at || c.added_at); return d != null && d >= 14; }).length;
 
     var statsRow = "";
     if(isOwnerTeam()){
       statsRow =
         '<div class="stats-row">' +
-          '<div class="stat-tile primary"><div class="stat-icon">' + icon("key") + '</div><div class="stat-num">' + actives.length + '</div><div class="stat-label">' + t("tabActive") + '</div></div>' +
+          '<div class="stat-tile primary"><div class="stat-icon">' + icon("key") + '</div><div class="stat-num">' + working.length + '</div><div class="stat-label">' + t("tabActive") + '</div></div>' +
           '<div class="stat-tile"><div class="stat-icon">' + icon("users") + '</div><div class="stat-num">' + state.clients.length + '</div><div class="stat-label">' + t("statTotal") + '</div></div>' +
           '<div class="stat-tile"><div class="stat-icon">' + icon("trendingUp") + '</div><div class="stat-num">' + newCount + '</div><div class="stat-label">' + t("statNew") + '</div></div>' +
-          '<div class="stat-tile warn"><div class="stat-icon">' + icon("clock") + '</div><div class="stat-num">' + staleCount + '</div><div class="stat-label">' + t("statFollowup") + '</div></div>' +
+          '<div class="stat-tile"><div class="stat-icon">' + icon("archive") + '</div><div class="stat-num">' + archiveds.length + '</div><div class="stat-label">' + t("tabArchived") + '</div></div>' +
         '</div>';
     }
 
@@ -971,9 +970,8 @@
           '<input type="search" id="f-search" placeholder="' + t("searchPlaceholder") + '" value="' + esc(view.search) + '">' +
         '</div>' +
         '<div class="tabs">' +
-          '<button class="tab' + (view.tab==="active"?" active":"") + '" data-action="set-tab" data-tab="active">' + t("tabActive") + ' <span class="count">' + actives.length + '</span></button>' +
-          '<button class="tab' + (view.tab==="inactive"?" active":"") + '" data-action="set-tab" data-tab="inactive">' + t("tabInactive") + ' <span class="count">' + inactives.length + '</span></button>' +
-          '<button class="tab' + (view.tab==="archived"?" active":"") + '" data-action="set-tab" data-tab="archived">' + t("tabArchived") + ' <span class="count">' + archiveds.length + '</span></button>' +
+          '<button class="tab' + (!isArchiveTab?" active":"") + '" data-action="set-tab" data-tab="active">' + t("tabActive") + ' <span class="count">' + working.length + '</span></button>' +
+          '<button class="tab' + (isArchiveTab?" active":"") + '" data-action="set-tab" data-tab="archived">' + t("tabArchived") + ' <span class="count">' + archiveds.length + '</span></button>' +
         '</div>' +
         '<div class="list">' + cardsHTML + '</div>' +
       '</div>' +
