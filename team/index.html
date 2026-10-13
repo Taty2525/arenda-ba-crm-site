@@ -196,6 +196,9 @@
   .comment-compose{display:flex;flex-direction:column;gap:6px;margin-top:2px;}
   .comment-compose textarea{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:7px 10px;font-size:13px;min-height:44px;font-family:inherit;}
   .comment-compose-row{display:flex;gap:8px;align-items:center;justify-content:space-between;}
+  .comment-actions{display:flex;gap:4px;margin-top:6px;}
+  .comment-actions .btn{padding:2px 8px;font-size:11.5px;opacity:.8;}
+  .comment-actions .btn:hover{opacity:1;}
 
   /* login */
   .login-wrap{max-width:380px;margin:14vh auto 0;padding:0 20px;text-align:center;}
@@ -434,8 +437,8 @@
     lang: loadJSON("crm_lang_v2", "ru"),
     tab: "active", search: "",
     editingId: null, draft: null, photoFile: null, photoBusy:false,
-    pendingDeleteId: null,
-    expandedPhoto: {}, newComment: {}, newCommentPrivate: {}, translating: {}, composeOpen: {},
+    pendingDeleteId: null, pendingDeleteCommentId: null, editingCommentId: null,
+    expandedPhoto: {}, newComment: {}, newCommentPrivate: {}, editCommentText: {}, translating: {}, composeOpen: {},
     loginSent:false, loginBusy:false, loginError:false
   };
 
@@ -464,7 +467,8 @@
     send: '<path d="M20 4 4.5 10.5 11 13l2.5 6.5L20 4z"/><path d="M11 13l4-4.5"/>',
     logOut: '<path d="M9 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h3"/><path d="M15 16l4-4-4-4"/><path d="M19 12H9"/>',
     image: '<rect x="3.5" y="4.5" width="17" height="15" rx="2"/><circle cx="9" cy="10" r="1.6"/><path d="M4 17l5-5 4 4 3-3 4 4"/>',
-    chat: '<path d="M4 5.5h16v11H9.5L5 20v-3.5H4z"/>'
+    chat: '<path d="M4 5.5h16v11H9.5L5 20v-3.5H4z"/>',
+    x: '<path d="M6 6l12 12"/><path d="M18 6L6 18"/>'
   };
   function icon(name){
     var p = ICON_PATHS[name] || "";
@@ -662,11 +666,42 @@
     // испанском — перевод (а пока перевода ещё нет — на секунду-две
     // дольше самого комментария — временно показываем русский, чтобы
     // комментарий не пропадал из вида).
+    // Изменить/удалить комментарий может только владелец (как и с самими
+    // карточками клиентов — см. "clients: owner can ..." в RLS) — у
+    // client_comments нет столбца с автором-пользователем, чтобы отдельно
+    // разрешить "только своё" команде, поэтому сделано так же просто и
+    // предсказуемо, как остальные владельческие действия.
     var itemsHTML = list.length ? list.map(function(cm){
       var text = (view.lang === "es") ? (cm.body_es || cm.body) : cm.body;
+      var metaHTML = '<div class="comment-meta">' + (cm.is_private ? icon("lock") : "") + esc(cm.author_name||"") + '</div>';
+      if(view.editingCommentId === cm.id){
+        return '<div class="comment role-' + esc(cm.author_role||"team") + '">' +
+          metaHTML +
+          '<div class="comment-compose">' +
+            '<textarea data-comment-edit-input="' + cm.id + '" autofocus>' + esc(view.editCommentText[cm.id] != null ? view.editCommentText[cm.id] : cm.body) + '</textarea>' +
+            '<div class="comment-compose-row">' +
+              '<button class="btn btn-sm btn-primary" data-action="save-comment" data-id="' + cm.id + '">' + icon("send") + t("save") + '</button>' +
+              '<button class="btn btn-sm btn-ghost" data-action="cancel-edit-comment" data-id="' + cm.id + '">' + t("cancel") + '</button>' +
+            '</div>' +
+          '</div>' +
+        '</div>';
+      }
+      var actionsHTML = "";
+      if(isOwner()){
+        if(view.pendingDeleteCommentId === cm.id){
+          actionsHTML = '<span class="confirm-row" style="margin-top:6px;">' + t("confirmDelete") + ' <button class="btn btn-sm btn-danger" data-action="confirm-delete-comment" data-id="' + cm.id + '">' + t("yes") + '</button><button class="btn btn-sm" data-action="cancel-delete-comment" data-id="' + cm.id + '">' + t("no") + '</button></span>';
+        } else {
+          actionsHTML =
+            '<div class="comment-actions">' +
+              '<button type="button" class="btn btn-ghost btn-sm" data-action="edit-comment" data-id="' + cm.id + '">' + icon("pencil") + t("edit") + '</button>' +
+              '<button type="button" class="btn btn-ghost btn-sm" data-action="delete-comment" data-id="' + cm.id + '">' + icon("trash") + t("del") + '</button>' +
+            '</div>';
+        }
+      }
       return '<div class="comment role-' + esc(cm.author_role||"team") + '">' +
-        '<div class="comment-meta">' + (cm.is_private ? icon("lock") : "") + esc(cm.author_name||"") + '</div>' +
+        metaHTML +
         esc(text) +
+        actionsHTML +
       '</div>';
     }).join("") : '<div style="font-size:12.5px;color:var(--ink-faint);">' + t("noComments") + '</div>';
 
@@ -683,7 +718,10 @@
           '<div class="comment-compose">' +
             '<textarea data-comment-input="' + clientId + '" placeholder="' + t("commentPlaceholder") + '" autofocus>' + esc(view.newComment[clientId]||"") + '</textarea>' +
             '<div class="comment-compose-row">' + privToggle +
-              '<button class="btn btn-sm btn-primary" data-action="send-comment" data-id="' + clientId + '">' + icon("send") + t("commentSend") + '</button>' +
+              '<span style="display:flex;gap:6px;">' +
+                '<button class="btn btn-sm btn-primary" data-action="send-comment" data-id="' + clientId + '">' + icon("send") + t("commentSend") + '</button>' +
+                '<button type="button" class="btn btn-sm btn-ghost" data-action="close-compose" data-id="' + clientId + '" title="' + t("cancel") + '">' + icon("x") + '</button>' +
+              '</span>' +
             '</div>' +
           '</div>';
       } else {
@@ -746,6 +784,17 @@
         actions += '<span class="confirm-row">' + t("confirmDelete") + ' <button class="btn btn-sm btn-danger" data-action="confirm-delete" data-id="' + c.id + '">' + t("yes") + '</button><button class="btn btn-sm" data-action="cancel-delete" data-id="' + c.id + '">' + t("no") + '</button></span>';
       } else {
         actions += '<button class="btn btn-ghost btn-sm btn-danger" data-action="delete-client" data-id="' + c.id + '">' + icon("trash") + '</button>';
+      }
+    } else if(isOwner() && readOnly){
+      // Вкладка "Архив" — карточка иначе полностью read-only (см. комментарий
+      // у readOnly выше), но по просьбе Татьяны (2026-10-13) добавлена
+      // возможность окончательно удалить клиента прямо из архива — без
+      // восстановления и без других действий, то же самое подтверждение
+      // (confirm-row), что и у обычного удаления.
+      if(view.pendingDeleteId === c.id){
+        actions += '<span class="confirm-row">' + t("confirmDelete") + ' <button class="btn btn-sm btn-danger" data-action="confirm-delete" data-id="' + c.id + '">' + t("yes") + '</button><button class="btn btn-sm" data-action="cancel-delete" data-id="' + c.id + '">' + t("no") + '</button></span>';
+      } else {
+        actions += '<button class="btn btn-ghost btn-sm btn-danger" data-action="delete-client" data-id="' + c.id + '">' + icon("trash") + t("del") + '</button>';
       }
     }
 
@@ -1125,6 +1174,30 @@
     });
   }
 
+  // Изменить/удалить комментарий — только owner (см. RLS-политики
+  // "comments: owner can update/delete" — без них запрос просто ничего не
+  // поменяет, RLS молча отфильтрует строку, а не вернёт явную ошибку).
+  function updateComment(commentId){
+    var body = (view.editCommentText[commentId]||"").trim();
+    if(!body) return;
+    // body_es сбрасываем в null, как и при ручной правке move_in_text/
+    // rental_term_text — старый перевод относился к старому тексту,
+    // autoTranslateMissing() сама пересчитает его в фоне для нового.
+    sb.from("client_comments").update({ body: body, body_es: null }).eq("id", commentId).then(function(res){
+      if(res.error){ showToast(t("saveErrorToast")); return; }
+      view.editingCommentId = null;
+      loadComments().then(render);
+    });
+  }
+
+  function deleteComment(commentId){
+    sb.from("client_comments").delete().eq("id", commentId).then(function(res){
+      if(res.error){ showToast(t("saveErrorToast")); return; }
+      view.pendingDeleteCommentId = null;
+      loadComments().then(render);
+    });
+  }
+
   // Перевод на испанский — полностью автоматический, без кнопки: как
   // только находится комментарий без body_es или клиент с move_in_text без
   // move_in_text_es (новый, или старый, ещё не переведённый), он тихо
@@ -1160,7 +1233,18 @@
   function translateText(text){
     return sb.functions.invoke("translate-comment", { body: { text: text } }).then(function(res){
       if(res.error || !res.data || !res.data.es) return null;
-      return res.data.es;
+      var es = res.data.es;
+      // Защита от редкого сбоя перевода (замечено 2026-10-13): иногда
+      // модель вместо перевода отвечает "разговором" о самой задаче
+      // (вроде "хорошо, пришли текст, который нужно перевести") — такой
+      // ответ всегда заметно длиннее разумного перевода короткой фразы.
+      // Если результат выглядит подозрительно длинным для входного текста
+      // — не сохраняем его: лучше показать исходный текст (есть фолбэк
+      // cm.body_es||cm.body / move_in_text_es||move_in_text в местах, где
+      // это используется), чем явную бессмыслицу. autoTranslateMissing()
+      // сам попробует перевести снова при следующей загрузке страницы.
+      if(es.length > Math.max(60, text.length * 4)) return null;
+      return es;
     }).catch(function(){ return null; });
   }
 
@@ -1205,6 +1289,9 @@
     if(el && el.hasAttribute && el.hasAttribute("data-field") && el.type !== "checkbox"){ readFormValuesIntoDraft(); }
     if(el && el.hasAttribute && el.hasAttribute("data-comment-input")){
       view.newComment[el.getAttribute("data-comment-input")] = el.value;
+    }
+    if(el && el.hasAttribute && el.hasAttribute("data-comment-edit-input")){
+      view.editCommentText[el.getAttribute("data-comment-edit-input")] = el.value;
     }
   });
   document.addEventListener("change", function(e){
@@ -1266,6 +1353,24 @@
     }
     if(action === "send-comment"){ sendComment(btn.getAttribute("data-id")); return; }
     if(action === "open-compose"){ view.composeOpen[btn.getAttribute("data-id")] = true; render(); return; }
+    if(action === "close-compose"){
+      var ccId = btn.getAttribute("data-id");
+      view.composeOpen[ccId] = false;
+      view.newComment[ccId] = ""; // передумала — черновик комментария тоже сбрасываем
+      render(); return;
+    }
+    if(action === "edit-comment"){
+      var ecId = btn.getAttribute("data-id");
+      var ec = [].concat.apply([], Object.keys(state.commentsByClient).map(function(k){ return state.commentsByClient[k]; })).filter(function(x){ return x.id === ecId; })[0];
+      view.editingCommentId = ecId;
+      view.editCommentText[ecId] = ec ? ec.body : "";
+      render(); return;
+    }
+    if(action === "cancel-edit-comment"){ view.editingCommentId = null; render(); return; }
+    if(action === "save-comment"){ updateComment(btn.getAttribute("data-id")); return; }
+    if(action === "delete-comment"){ view.pendingDeleteCommentId = btn.getAttribute("data-id"); render(); return; }
+    if(action === "cancel-delete-comment"){ view.pendingDeleteCommentId = null; render(); return; }
+    if(action === "confirm-delete-comment"){ deleteComment(btn.getAttribute("data-id")); return; }
     if(action === "toggle-photo"){
       var pid = btn.getAttribute("data-id");
       view.expandedPhoto[pid] = !view.expandedPhoto[pid];
